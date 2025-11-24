@@ -79,6 +79,7 @@ const browserLogs: Map<string, string[]> = new Map()
 const MAX_LOGS_PER_PAGE = 5000
 
 const RELAY_PORT = 19988
+const NO_TABS_ERROR = `No browser tabs are connected. Please install and enable the Playwriter extension on at least one tab: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe`
 
 async function isPortTaken(port: number): Promise<boolean> {
   try {
@@ -133,9 +134,12 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
   })
 
   const pages = context.pages()
-  const page = pages.length > 0 ? pages[0] : await context.newPage()
+  if (pages.length === 0) {
+    throw new Error(NO_TABS_ERROR)
+  }
+  const page = pages[0]
   
-  // Set up console listener for all existing pages (including the one we might have just created)
+  // Set up console listener for all existing pages
   context.pages().forEach(p => setupPageConsoleListener(p))
 
   state.browser = browser
@@ -231,7 +235,7 @@ async function getCurrentPage(timeout = 5000) {
     }
   }
 
-  throw new Error('No page available')
+  throw new Error(NO_TABS_ERROR)
 }
 
 async function resetConnection(): Promise<{ browser: Browser; page: Page; context: BrowserContext }> {
@@ -265,9 +269,12 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
   })
 
   const pages = context.pages()
-  const page = pages.length > 0 ? pages[0] : await context.newPage()
+  if (pages.length === 0) {
+    throw new Error(NO_TABS_ERROR)
+  }
+  const page = pages[0]
   
-  // Set up console listener for all existing pages (including the one we might have just created)
+  // Set up console listener for all existing pages
   context.pages().forEach(p => setupPageConsoleListener(p))
 
   state.browser = browser
