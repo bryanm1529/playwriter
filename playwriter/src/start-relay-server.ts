@@ -22,6 +22,19 @@ const logger = {
   error: log
 }
 
+process.on('uncaughtException', async (err) => {
+  await logger.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason) => {
+  await logger.error('Unhandled Rejection:', reason);
+  process.exit(1);
+});
+
+process.on('exit', async (code) => {
+  await logger.log(`Process exiting with code: ${code}`);
+});
 
 
 export async function startServer({ port = 19988 }: { port?: number } = {}) {
