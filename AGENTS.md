@@ -53,7 +53,7 @@ NEVER call browser.close() in tests or any other code that interacts with our CD
 
 remember that every time the extension is activated in a tab that tab gets added to the available pages. so if you toggle the extension and then do .newPage() there will be 2 pages, not 1.
 
-to debug server or extension issues you can also inspect the file playwriter/relay-server.log to see both extension and server logs. with all cdp events sent. to see if there are events missing or something broken. this file is recreated every time the server is started and appended in real time. use rg to only read relevant lines and parts because it can get quite long
+to debug server or extension issues you can also inspect the file @playwriter/relay-server.log to see both extension and server logs. with all cdp events sent. to see if there are events missing or something broken. this file is recreated every time the server is started and appended in real time. use rg to only read relevant lines and parts because it can get quite long
 
 tests will take about 30 seconds, so set a timeout of at least 60 seconds when running the test bash command
 
