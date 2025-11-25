@@ -7,6 +7,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
+import dedent from 'string-dedent'
 import { getCdpUrl } from './utils.js'
 
 const require = createRequire(import.meta.url)
@@ -48,12 +49,12 @@ interface VMContext {
   }
   accessibilitySnapshot: (options: {
     page: Page
-    searchString?: string | RegExp
+    search?: string | RegExp
     contextLines?: number
   }) => Promise<string>
   getLocatorStringForElement: (element: any) => Promise<string>
   resetPlaywright: () => Promise<{ page: Page; context: BrowserContext }>
-  getLatestLogs: (options?: { page?: Page; count?: number; searchFilter?: string | RegExp }) => Promise<string[]>
+  getLatestLogs: (options?: { page?: Page; count?: number; search?: string | RegExp }) => Promise<string[]>
   clearAllLogs: () => void
   require: NodeRequire
   import: (specifier: string) => Promise<any>
@@ -387,15 +388,15 @@ server.tool(
 
       const accessibilitySnapshot = async (options: {
         page: Page
-        searchString?: string | RegExp
+        search?: string | RegExp
         contextLines?: number
       }) => {
-        const { page: targetPage, searchString, contextLines = 10 } = options
+        const { page: targetPage, search, contextLines = 10 } = options
         if ((targetPage as any)._snapshotForAI) {
           const snapshot = await (targetPage as any)._snapshotForAI()
           const snapshotStr = typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot, null, 2)
 
-          if (!searchString) {
+          if (!search) {
             return snapshotStr
           }
 
@@ -405,10 +406,10 @@ server.tool(
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i]
             let isMatch = false
-            if (isRegExp(searchString)) {
-              isMatch = searchString.test(line)
+            if (isRegExp(search)) {
+              isMatch = search.test(line)
             } else {
-              isMatch = line.includes(searchString)
+              isMatch = line.includes(search)
             }
 
             if (isMatch) {
@@ -456,36 +457,32 @@ server.tool(
         })
       }
 
-      const getLatestLogs = async (options?: { page?: Page; count?: number; searchFilter?: string | RegExp }) => {
-        const { page: filterPage, count, searchFilter } = options || {}
+      const getLatestLogs = async (options?: { page?: Page; count?: number; search?: string | RegExp }) => {
+        const { page: filterPage, count, search } = options || {}
 
         let allLogs: string[] = []
 
-        // Get logs from specific page or all pages
         if (filterPage) {
           const targetId = await getPageTargetId(filterPage)
           const pageLogs = browserLogs.get(targetId) || []
           allLogs = [...pageLogs]
         } else {
-          // Combine logs from all pages
           for (const pageLogs of browserLogs.values()) {
             allLogs.push(...pageLogs)
           }
         }
 
-        // Filter by search string or regex
-        if (searchFilter) {
+        if (search) {
           allLogs = allLogs.filter((log) => {
-            if (typeof searchFilter === 'string') {
-              return log.includes(searchFilter)
-            } else if (isRegExp(searchFilter)) {
-              return searchFilter.test(log)
+            if (typeof search === 'string') {
+              return log.includes(search)
+            } else if (isRegExp(search)) {
+              return search.test(log)
             }
             return false
           })
         }
 
-        // Return all logs or limited count
         return count !== undefined ? allLogs.slice(-count) : allLogs
       }
 
@@ -622,11 +619,13 @@ server.tool(
 
 server.tool(
   'reset',
-  `Recreates the CDP connection and resets the browser/page/context. Use this when the MCP stops responding, you get connection errors, assertion failures, page closed, or timeout issues.
+  dedent`
+    Recreates the CDP connection and resets the browser/page/context. Use this when the MCP stops responding, you get connection errors, assertion failures, page closed, or timeout issues.
 
-After calling this tool, the page and context variables are automatically updated in the execution environment.
+    After calling this tool, the page and context variables are automatically updated in the execution environment.
 
-IMPORTANT: this completely resets the execution context, removing any custom properties you may have added to the global scope AND clearing all keys from the \`state\` object. Only \`page\`, \`context\`, \`state\` (empty), \`console\`, and utility functions will remain.`,
+    IMPORTANT: this completely resets the execution context, removing any custom properties you may have added to the global scope AND clearing all keys from the \`state\` object. Only \`page\`, \`context\`, \`state\` (empty), \`console\`, and utility functions will remain.
+  `,
   {},
   async () => {
     try {

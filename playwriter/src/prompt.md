@@ -72,14 +72,14 @@ always detach event listener you create at the end of a message using `page.remo
 
 you have access to some functions in addition to playwright methods:
 
-- `async accessibilitySnapshot({ page, searchString, contextLines })`: gets a human readable snapshot of clickable elements on the page. useful to see the overall structure of the page and what elements you can interact with.
+- `async accessibilitySnapshot({ page, search, contextLines })`: gets a human readable snapshot of clickable elements on the page. useful to see the overall structure of the page and what elements you can interact with.
     - `page`: the page object to snapshot
-    - `searchString`: (optional) a string or regex to filter the snapshot. If provided, returns the first 10 matches with surrounding context
+    - `search`: (optional) a string or regex to filter the snapshot. If provided, returns the first 10 matches with surrounding context
     - `contextLines`: (optional) number of lines of context to show around each match (default: 10)
-- `getLatestLogs({ page, count, searchFilter })`: retrieves browser console logs. The system automatically captures and stores up to 5000 logs per page. Logs are cleared when a page reloads or navigates.
+- `getLatestLogs({ page, count, search })`: retrieves browser console logs. The system automatically captures and stores up to 5000 logs per page. Logs are cleared when a page reloads or navigates.
     - `page`: (optional) filter logs by a specific page instance. Only returns logs from that page
     - `count`: (optional) limit number of logs to return. If not specified, returns all available logs
-    - `searchFilter`: (optional) string or regex to filter logs. Only returns logs that match
+    - `search`: (optional) string or regex to filter logs. Only returns logs that match
 
 To bring a tab to front and focus it, use the standard Playwright method `await page.bringToFront()`
 
@@ -119,19 +119,19 @@ console.log(await getLocatorStringForElement(loc));
 
 ## finding specific elements with snapshot
 
-You can use `searchString` to find specific elements in the snapshot without reading the whole page structure. This is useful for finding forms, textareas, or specific text.
+You can use `search` to find specific elements in the snapshot without reading the whole page structure. This is useful for finding forms, textareas, or specific text.
 
 Example: find a textarea or form using case-insensitive regex:
 
 ```js
-const snapshot = await accessibilitySnapshot({ page, searchString: /textarea|form/i })
+const snapshot = await accessibilitySnapshot({ page, search: /textarea|form/i })
 console.log(snapshot)
 ```
 
 Example: find elements containing "Login":
 
 ```js
-const snapshot = await accessibilitySnapshot({ page, searchString: "Login" })
+const snapshot = await accessibilitySnapshot({ page, search: "Login" })
 console.log(snapshot)
 ```
 
@@ -185,7 +185,7 @@ const allLogs = await getLatestLogs()
 console.log(allLogs)
 
 // Get last 50 browser error logs
-const errorLogs = await getLatestLogs({ count: 50, searchFilter: /\[error\]/ })
+const errorLogs = await getLatestLogs({ count: 50, search: /\[error\]/ })
 console.log(errorLogs)
 
 // Get all browser logs from the current page only
@@ -193,7 +193,7 @@ const pageLogs = await getLatestLogs({ page })
 console.log(pageLogs)
 
 // Find browser logs containing specific text
-const authLogs = await getLatestLogs({ searchFilter: 'authentication failed' })
+const authLogs = await getLatestLogs({ search: 'authentication failed' })
 console.log(authLogs)
 
 // Example output format:
