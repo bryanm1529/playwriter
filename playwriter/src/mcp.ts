@@ -90,6 +90,25 @@ const RELAY_PORT = 19988
 const LOG_FILE_PATH = process.env.PLAYWRITER_LOG_PATH || path.join(os.tmpdir(), 'playwriter-relay-server.log')
 const NO_TABS_ERROR = `No browser tabs are connected. Please install and enable the Playwriter extension on at least one tab: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe`
 
+
+
+async function setDeviceScaleFactorForMacOS(context: BrowserContext): Promise<void> {
+  if (os.platform() !== 'darwin') {
+    return
+  }
+  const options = (context as any)._options
+  if (!options || options.deviceScaleFactor === 2) {
+    return
+  }
+  options.deviceScaleFactor = 2
+  for (const page of context.pages()) {
+    const delegate = (page as any)._delegate
+    if (delegate?.updateEmulatedViewportSize) {
+      await delegate.updateEmulatedViewportSize().catch(() => {})
+    }
+  }
+}
+
 function isRegExp(value: any): value is RegExp {
   return typeof value === 'object' && value !== null && typeof value.test === 'function' && typeof value.exec === 'function'
 }
@@ -185,6 +204,8 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
 
   // Set up console listener for all existing pages
   context.pages().forEach((p) => setupPageConsoleListener(p))
+
+  await setDeviceScaleFactorForMacOS(context)
 
   state.browser = browser
   state.page = page
@@ -318,6 +339,8 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
 
   // Set up console listener for all existing pages
   context.pages().forEach((p) => setupPageConsoleListener(p))
+
+  await setDeviceScaleFactorForMacOS(context)
 
   state.browser = browser
   state.page = page
@@ -674,4 +697,3 @@ async function main() {
 }
 
 main().catch(console.error)
-
