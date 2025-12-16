@@ -52,6 +52,7 @@ IMPORTANT! never call bringToFront unless specifically asked by the user. It is 
 - only call `page.close()` if the user asks you so or if you previously created this page yourself with `newPage`. do not close user created pages unless asked
 - try to never sleep or run `page.waitForTimeout` unless you have to. there are better ways to wait for an element
 - never close browser or context. NEVER call `browser.close()`
+- NEVER use `page.context().newCDPSession()` or `browser.newCDPSession()` - these do not work through the playwriter relay. If you need to send raw CDP commands, use the `getCDPSession` utility function instead.
 
 ## always check the current page state after an action
 
@@ -88,6 +89,10 @@ you have access to some functions in addition to playwright methods:
     - `minWait`: (optional) minimum wait before checking in ms (default: 500)
     - Returns: `{ success, readyState, pendingRequests, waitTimeMs, timedOut }`
     - Filters out: ad networks (doubleclick, googlesyndication), analytics (google-analytics, mixpanel, segment), social (facebook.net, twitter), support widgets (intercom, zendesk), and slow fonts/images
+- `getCDPSession({ page })`: creates a CDP session to send raw Chrome DevTools Protocol commands. Use this instead of `page.context().newCDPSession()` which does not work through the playwriter relay.
+    - `page`: the page object to create the session for
+    - Returns: `{ send(method, params?), on(event, callback), off(event, callback), detach() }`
+    - Example: `const cdp = await getCDPSession({ page }); const metrics = await cdp.send('Page.getLayoutMetrics'); cdp.detach();`
 
 To bring a tab to front and focus it, use the standard Playwright method `await page.bringToFront()`
 

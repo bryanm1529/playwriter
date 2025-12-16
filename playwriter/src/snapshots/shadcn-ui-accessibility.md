@@ -25,10 +25,10 @@ Return value:
             - generic [ref=e18]: Search documentation...
             - generic [ref=e19]:
               - generic: ⌘K
-          - link "102k" [ref=e20] [cursor=pointer]:
+          - link "103k" [ref=e20] [cursor=pointer]:
             - /url: https://github.com/shadcn-ui/ui
             - img
-            - generic [ref=e21]: 102k
+            - generic [ref=e21]: 103k
           - button "Toggle theme" [ref=e22]:
             - img
             - generic [ref=e23]: Toggle theme

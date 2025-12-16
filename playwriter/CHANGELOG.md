@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.19
+
+### Patch Changes
+
+- **Added `getCDPSession` utility**: New function to send raw CDP commands through the relay
+  - Works with `getCDPSession({ page })` in MCP execute context
+  - Returns `{ send, on, off, detach }` interface for CDP commands and events
+  - Uses page index matching with URL verification for reliable target identification
+- **Converted CDP tests to use relay**: All CDP Session tests now go through the relay instead of direct playwright CDP
+  - Debugger, Profiler, and layout metrics tests all use `getCDPSessionForPage`
+- **Added warning about `newCDPSession`**: Documented in prompt.md that `page.context().newCDPSession()` does not work through the relay
+
 ## 0.0.18
 
 ### Patch Changes
@@ -11,10 +23,10 @@
 ### Patch Changes
 
 - **Improved error debugging**: Log file path now included in error messages and tool description. Log file writes to OS temp directory by default (`PLAYWRITER_LOG_PATH` env var to override)
-- **Added CDP Session tests**: New test suite for direct CDP usage via `page.context().newCDPSession(page)`
+- **Added CDP Session tests**: New test suite for CDP commands through the relay
   - Debugger test: pauses on `debugger` statement, captures stack trace, local variables, and evaluates expressions
   - Profiler test: profiles JavaScript execution with inline snapshot of function names
-  - Performance metrics test: captures metrics like Documents, Nodes, JSHeapUsedSize
+  - Layout metrics test: captures viewport dimensions via CDP
 - **Refactored test setup**: Extracted `setupTestContext()` and `cleanupTestContext()` to deduplicate beforeAll/afterAll code
 - **Improved `getExtensionServiceWorker`**: Now waits for extension global functions to be ready before returning
 - **Better TypeScript types**: Uses `Protocol.Debugger.PausedEvent`, `Protocol.Profiler.Profile`, `Protocol.Performance.Metric` instead of `any`

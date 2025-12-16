@@ -13,6 +13,7 @@ import dedent from 'string-dedent'
 import { createPatch } from 'diff'
 import { getCdpUrl } from './utils.js'
 import { waitForPageLoad, WaitForPageLoadOptions, WaitForPageLoadResult } from './wait-for-page-load.js'
+import { getCDPSessionForPage, CDPSession } from './cdp-session.js'
 
 const require = createRequire(import.meta.url)
 
@@ -62,6 +63,7 @@ interface VMContext {
   getLatestLogs: (options?: { page?: Page; count?: number; search?: string | RegExp }) => Promise<string[]>
   clearAllLogs: () => void
   waitForPageLoad: (options: WaitForPageLoadOptions) => Promise<WaitForPageLoadResult>
+  getCDPSession: (options: { page: Page }) => Promise<CDPSession>
   require: NodeRequire
   import: (specifier: string) => Promise<any>
 }
@@ -220,22 +222,12 @@ async function getPageTargetId(page: Page): Promise<string> {
     throw new Error('Page is null or undefined')
   }
 
-  // Always use internal _guid for consistency and speed
   const guid = (page as any)._guid
   if (guid) {
     return guid
   }
 
-  try {
-    // Fallback to CDP if _guid is not available
-    const client = await page.context().newCDPSession(page)
-    const { targetInfo } = await client.send('Target.getTargetInfo')
-    await client.detach()
-
-    return targetInfo.targetId
-  } catch (e) {
-    throw new Error(`Could not get page identifier: ${e}`)
-  }
+  throw new Error('Could not get page identifier: _guid not available')
 }
 
 function setupPageConsoleListener(page: Page) {
@@ -543,6 +535,11 @@ server.tool(
         browserLogs.clear()
       }
 
+      const getCDPSession = async (options: { page: Page }) => {
+        const wsUrl = getCdpUrl({ port: RELAY_PORT })
+        return getCDPSessionForPage({ page: options.page, wsUrl })
+      }
+
       let vmContextObj: VMContextWithGlobals = {
         page,
         context,
@@ -553,6 +550,7 @@ server.tool(
         getLatestLogs,
         clearAllLogs,
         waitForPageLoad,
+        getCDPSession,
         resetPlaywright: async () => {
           const { page: newPage, context: newContext } = await resetConnection()
 
@@ -566,6 +564,7 @@ server.tool(
             getLatestLogs,
             clearAllLogs,
             waitForPageLoad,
+            getCDPSession,
             resetPlaywright: vmContextObj.resetPlaywright,
             require,
             // TODO --experimental-vm-modules is needed to make import work in vm

@@ -10,6 +10,7 @@ import { getCdpUrl } from './utils.js'
 import type { ExtensionState } from 'mcp-extension/src/types.js'
 import type { Protocol } from 'devtools-protocol'
 import { imageSize } from 'image-size'
+import { getCDPSessionForPage } from './cdp-session.js'
 
 
 const execAsync = promisify(exec)
@@ -1341,12 +1342,14 @@ describe('MCP Server Tests', () => {
 
         await new Promise(r => setTimeout(r, 500))
 
-        const layoutMetrics = await serviceWorker.evaluate(async () => {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
-            const tabId = tabs[0]?.id
-            if (!tabId) throw new Error('No active tab')
-            return await chrome.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics')
-        }) as Protocol.Page.GetLayoutMetricsResponse
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const wsUrl = getCdpUrl()
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
+
+        const layoutMetrics = await cdpSession.send<Protocol.Page.GetLayoutMetricsResponse>('Page.getLayoutMetrics')
 
         const normalized = {
             cssLayoutViewport: layoutMetrics.cssLayoutViewport,
@@ -1396,14 +1399,16 @@ describe('MCP Server Tests', () => {
           }
         `)
 
-        const windowDpr = await page.evaluate(() => (globalThis as any).devicePixelRatio)
+        const windowDpr = await cdpPage!.evaluate(() => (globalThis as any).devicePixelRatio)
         console.log('window.devicePixelRatio:', windowDpr)
         expect(windowDpr).toBe(1)
 
+        cdpSession.detach()
+        await browser.close()
         await page.close()
     }, 60000)
 
-    it('should support newCDPSession through the relay', async () => {
+    it('should support getCDPSession through the relay', async () => {
         const browserContext = getBrowserContext()
         const serviceWorker = await getExtensionServiceWorker(browserContext)
 
@@ -1421,13 +1426,14 @@ describe('MCP Server Tests', () => {
         const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
         expect(cdpPage).toBeDefined()
 
-        const client = await cdpPage!.context().newCDPSession(cdpPage!)
+        const wsUrl = getCdpUrl()
+        const client = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
         
-        const layoutMetrics = await client.send('Page.getLayoutMetrics') as Protocol.Page.GetLayoutMetricsResponse
+        const layoutMetrics = await client.send<Protocol.Page.GetLayoutMetricsResponse>('Page.getLayoutMetrics')
         expect(layoutMetrics.cssVisualViewport).toBeDefined()
         expect(layoutMetrics.cssVisualViewport.clientWidth).toBeGreaterThan(0)
 
-        await client.detach()
+        client.detach()
         await browser.close()
         await page.close()
     }, 60000)
@@ -1516,19 +1522,32 @@ describe('CDP Session Tests', () => {
 
     it('should enable debugger and pause on debugger statement via CDP session', async () => {
         const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
         const page = await browserContext.newPage()
         await page.goto('https://example.com/')
+        await page.bringToFront()
 
-        const cdpSession = await page.context().newCDPSession(page)
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const wsUrl = getCdpUrl()
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
         await cdpSession.send('Debugger.enable')
 
         const pausedPromise = new Promise<Protocol.Debugger.PausedEvent>((resolve) => {
-            cdpSession.once('Debugger.paused', (params) => {
+            cdpSession.on('Debugger.paused', (params) => {
                 resolve(params as Protocol.Debugger.PausedEvent)
             })
         })
 
-        page.evaluate(`
+        cdpPage!.evaluate(`
             (function testFunction() {
                 const localVar = 'hello';
                 const numberVar = 42;
@@ -1582,10 +1601,10 @@ describe('CDP Session Tests', () => {
         const localVars: Record<string, unknown> = {}
 
         if (localScope?.object.objectId) {
-            const { result } = await cdpSession.send('Runtime.getProperties', {
+            const { result } = await cdpSession.send<{ result: Protocol.Runtime.PropertyDescriptor[] }>('Runtime.getProperties', {
                 objectId: localScope.object.objectId,
                 ownProperties: true,
-            }) as { result: Protocol.Runtime.PropertyDescriptor[] }
+            })
 
             for (const prop of result) {
                 if (prop.value) {
@@ -1613,10 +1632,10 @@ describe('CDP Session Tests', () => {
           }
         `)
 
-        const evalResult = await cdpSession.send('Debugger.evaluateOnCallFrame', {
+        const evalResult = await cdpSession.send<{ result: Protocol.Runtime.RemoteObject }>('Debugger.evaluateOnCallFrame', {
             callFrameId: topFrame.callFrameId,
             expression: 'localVar + " world " + numberVar',
-        }) as { result: Protocol.Runtime.RemoteObject }
+        })
 
         expect({
             evaluatedExpression: 'localVar + " world " + numberVar',
@@ -1632,20 +1651,34 @@ describe('CDP Session Tests', () => {
 
         await cdpSession.send('Debugger.resume')
         await cdpSession.send('Debugger.disable')
-        await cdpSession.detach()
+        cdpSession.detach()
+        await browser.close()
         await page.close()
-    }, 30000)
+    }, 60000)
 
     it('should profile JavaScript execution using CDP Profiler', async () => {
         const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
         const page = await browserContext.newPage()
         await page.goto('https://example.com/')
+        await page.bringToFront()
 
-        const cdpSession = await page.context().newCDPSession(page)
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const wsUrl = getCdpUrl()
+        const cdpSession = await getCDPSessionForPage({ page: cdpPage!, wsUrl })
         await cdpSession.send('Profiler.enable')
         await cdpSession.send('Profiler.start')
 
-        await page.evaluate(`
+        await cdpPage!.evaluate(`
             (() => {
                 function fibonacci(n) {
                     if (n <= 1) return n
@@ -1660,7 +1693,7 @@ describe('CDP Session Tests', () => {
             })()
         `)
 
-        const { profile } = await cdpSession.send('Profiler.stop') as { profile: Protocol.Profiler.Profile }
+        const { profile } = await cdpSession.send<{ profile: Protocol.Profiler.Profile }>('Profiler.stop')
 
         const functionNames = profile.nodes
             .map(n => n.callFrame.functionName)
@@ -1674,23 +1707,23 @@ describe('CDP Session Tests', () => {
             sampleFunctionNames: functionNames,
         }).toMatchInlineSnapshot(`
           {
-            "durationMicroseconds": 6956,
+            "durationMicroseconds": 6879,
             "hasNodes": true,
-            "nodeCount": 8,
+            "nodeCount": 5,
             "sampleFunctionNames": [
               "(root)",
               "(program)",
-              "(idle)",
               "evaluate",
-              "parseEvaluationResultValue",
+              "(idle)",
             ],
           }
         `)
 
         await cdpSession.send('Profiler.disable')
-        await cdpSession.detach()
+        cdpSession.detach()
+        await browser.close()
         await page.close()
-    }, 30000)
+    }, 60000)
 
     it('should click at correct coordinates on high-DPI simulation', async () => {
         const browserContext = getBrowserContext()
