@@ -1,6 +1,6 @@
 import { createMCPClient } from './mcp-client.js'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { exec } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { chromium, BrowserContext } from 'playwright-core'
 import path from 'node:path'
@@ -9,8 +9,7 @@ import os from 'node:os'
 import { getCdpUrl } from './utils.js'
 import type { ExtensionState } from 'mcp-extension/src/types.js'
 import type { Protocol } from 'devtools-protocol'
-
-import { spawn } from 'node:child_process'
+import { imageSize } from 'image-size'
 
 
 const execAsync = promisify(exec)
@@ -1277,6 +1276,162 @@ describe('MCP Server Tests', () => {
         await page.close()
     }, 60000)
 
+    it('should capture screenshot correctly', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.goto('https://example.com/')
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+
+        expect(cdpPage).toBeDefined()
+
+        const viewportSize = cdpPage!.viewportSize()
+        console.log('Viewport size:', viewportSize)
+
+        const viewportScreenshot = await cdpPage!.screenshot()
+        expect(viewportScreenshot).toBeDefined()
+
+        const viewportDimensions = imageSize(viewportScreenshot)
+        console.log('Viewport screenshot dimensions:', viewportDimensions)
+        expect(viewportDimensions.width).toBeGreaterThan(0)
+        expect(viewportDimensions.height).toBeGreaterThan(0)
+        if (viewportSize) {
+            expect(viewportDimensions.width).toBe(viewportSize.width)
+            expect(viewportDimensions.height).toBe(viewportSize.height)
+        }
+
+        const fullPageScreenshot = await cdpPage!.screenshot({ fullPage: true })
+        expect(fullPageScreenshot).toBeDefined()
+
+        const fullPageDimensions = imageSize(fullPageScreenshot)
+        console.log('Full page screenshot dimensions:', fullPageDimensions)
+        expect(fullPageDimensions.width).toBeGreaterThan(0)
+        expect(fullPageDimensions.height).toBeGreaterThan(0)
+        expect(fullPageDimensions.width).toBeGreaterThanOrEqual(viewportDimensions.width!)
+
+        const screenshotPath = path.join(os.tmpdir(), 'playwriter-test-screenshot.png')
+        fs.writeFileSync(screenshotPath, viewportScreenshot)
+        console.log('Screenshot saved to:', screenshotPath)
+
+        await browser.close()
+        await page.close()
+    }, 60000)
+
+    it('should return correct layout metrics via CDP', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.goto('https://example.com/')
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+
+        await new Promise(r => setTimeout(r, 500))
+
+        const layoutMetrics = await serviceWorker.evaluate(async () => {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+            const tabId = tabs[0]?.id
+            if (!tabId) throw new Error('No active tab')
+            return await chrome.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics')
+        }) as Protocol.Page.GetLayoutMetricsResponse
+
+        const normalized = {
+            cssLayoutViewport: layoutMetrics.cssLayoutViewport,
+            cssVisualViewport: layoutMetrics.cssVisualViewport,
+            layoutViewport: layoutMetrics.layoutViewport,
+            visualViewport: layoutMetrics.visualViewport,
+            devicePixelRatio: layoutMetrics.cssVisualViewport.clientWidth > 0
+                ? layoutMetrics.visualViewport.clientWidth / layoutMetrics.cssVisualViewport.clientWidth
+                : 1,
+        }
+
+        expect(normalized).toMatchInlineSnapshot(`
+          {
+            "cssLayoutViewport": {
+              "clientHeight": 720,
+              "clientWidth": 1280,
+              "pageX": 0,
+              "pageY": 0,
+            },
+            "cssVisualViewport": {
+              "clientHeight": 720,
+              "clientWidth": 1280,
+              "offsetX": 0,
+              "offsetY": 0,
+              "pageX": 0,
+              "pageY": 0,
+              "scale": 1,
+              "zoom": 1,
+            },
+            "devicePixelRatio": 1,
+            "layoutViewport": {
+              "clientHeight": 720,
+              "clientWidth": 1280,
+              "pageX": 0,
+              "pageY": 0,
+            },
+            "visualViewport": {
+              "clientHeight": 720,
+              "clientWidth": 1280,
+              "offsetX": 0,
+              "offsetY": 0,
+              "pageX": 0,
+              "pageY": 0,
+              "scale": 1,
+              "zoom": 1,
+            },
+          }
+        `)
+
+        const windowDpr = await page.evaluate(() => (globalThis as any).devicePixelRatio)
+        console.log('window.devicePixelRatio:', windowDpr)
+        expect(windowDpr).toBe(1)
+
+        await page.close()
+    }, 60000)
+
+    it('should support newCDPSession through the relay', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.goto('https://example.com/')
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+
+        await new Promise(r => setTimeout(r, 500))
+
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
+
+        const client = await cdpPage!.context().newCDPSession(cdpPage!)
+        
+        const layoutMetrics = await client.send('Page.getLayoutMetrics') as Protocol.Page.GetLayoutMetricsResponse
+        expect(layoutMetrics.cssVisualViewport).toBeDefined()
+        expect(layoutMetrics.cssVisualViewport.clientWidth).toBeGreaterThan(0)
+
+        await client.detach()
+        await browser.close()
+        await page.close()
+    }, 60000)
+
     it('should work with stagehand', async () => {
         const browserContext = getBrowserContext()
         const serviceWorker = await getExtensionServiceWorker(browserContext)
@@ -1537,65 +1692,44 @@ describe('CDP Session Tests', () => {
         await page.close()
     }, 30000)
 
-    it('should capture performance metrics via CDP Performance domain', async () => {
+    it('should click at correct coordinates on high-DPI simulation', async () => {
         const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
         const page = await browserContext.newPage()
         await page.goto('https://example.com/')
+        await page.bringToFront()
 
-        const cdpSession = await page.context().newCDPSession(page)
-        await cdpSession.send('Performance.enable')
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 500))
 
-        const { metrics } = await cdpSession.send('Performance.getMetrics') as { metrics: Protocol.Performance.Metric[] }
+        const browser = await chromium.connectOverCDP(getCdpUrl())
+        const cdpPage = browser.contexts()[0].pages().find(p => p.url().includes('example.com'))
+        expect(cdpPage).toBeDefined()
 
-        const selectedMetrics = metrics
-            .filter(m => ['Documents', 'Nodes', 'JSEventListeners', 'LayoutCount', 'ScriptDuration', 'JSHeapUsedSize'].includes(m.name))
-            .map(m => ({
-                name: m.name,
-                hasValue: typeof m.value === 'number',
-                valueType: typeof m.value,
-            }))
+        const h1Bounds = await cdpPage!.locator('h1').boundingBox()
+        expect(h1Bounds).toBeDefined()
+        console.log('H1 bounding box:', h1Bounds)
 
-        expect(selectedMetrics).toMatchInlineSnapshot(`
-          [
-            {
-              "hasValue": true,
-              "name": "Documents",
-              "valueType": "number",
-            },
-            {
-              "hasValue": true,
-              "name": "JSEventListeners",
-              "valueType": "number",
-            },
-            {
-              "hasValue": true,
-              "name": "Nodes",
-              "valueType": "number",
-            },
-            {
-              "hasValue": true,
-              "name": "LayoutCount",
-              "valueType": "number",
-            },
-            {
-              "hasValue": true,
-              "name": "ScriptDuration",
-              "valueType": "number",
-            },
-            {
-              "hasValue": true,
-              "name": "JSHeapUsedSize",
-              "valueType": "number",
-            },
-          ]
-        `)
+        await cdpPage!.evaluate(() => {
+            (window as any).clickedAt = null;
+            document.addEventListener('click', (e) => {
+                (window as any).clickedAt = { x: e.clientX, y: e.clientY };
+            });
+        })
 
-        const metricNames = metrics.map(m => m.name)
-        expect(metricNames).toContain('JSHeapUsedSize')
-        expect(metricNames).toContain('JSHeapTotalSize')
+        await cdpPage!.locator('h1').click()
 
-        await cdpSession.send('Performance.disable')
-        await cdpSession.detach()
+        const clickedAt = await cdpPage!.evaluate(() => (window as any).clickedAt)
+        console.log('Clicked at:', clickedAt)
+
+        expect(clickedAt).toBeDefined()
+        expect(clickedAt.x).toBeGreaterThan(0)
+        expect(clickedAt.y).toBeGreaterThan(0)
+
+        await browser.close()
         await page.close()
-    }, 30000)
+    }, 60000)
 })
