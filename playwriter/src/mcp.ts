@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import dedent from 'string-dedent'
 import { createPatch } from 'diff'
-import { getCdpUrl } from './utils.js'
+import { getCdpUrl, getLogFilePath } from './utils.js'
 import { waitForPageLoad, WaitForPageLoadOptions, WaitForPageLoadResult } from './wait-for-page-load.js'
 import { getCDPSessionForPage, CDPSession } from './cdp-session.js'
 
@@ -92,7 +92,7 @@ const lastSnapshots: WeakMap<Page, string> = new WeakMap()
 const cdpSessionCache: WeakMap<Page, CDPSession> = new WeakMap()
 
 const RELAY_PORT = 19988
-const LOG_FILE_PATH = process.env.PLAYWRITER_LOG_PATH || path.join(os.tmpdir(), 'playwriter-relay-server.log')
+const LOG_FILE_PATH = getLogFilePath()
 const NO_TABS_ERROR = `No browser tabs are connected. Please install and enable the Playwriter extension on at least one tab: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe`
 
 

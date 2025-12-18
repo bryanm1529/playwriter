@@ -48,6 +48,7 @@
     "string-dedent": "^3.0.2",
     "user-agents": "^1.1.669",
     "ws": "^8.18.3",
+    "xdg-basedir": "^5.1.0",
     "zod": "^3"
   }
 }
