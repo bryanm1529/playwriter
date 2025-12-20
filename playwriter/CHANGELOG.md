@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.22
+
+### Patch Changes
+
+- **Green icons for connected tabs**: Extension now uses distinct green icons when tabs are connected
+- **Cleaner timeout handling**: Code execution timeouts no longer suggest using reset tool
+
 ## 0.0.21
 
 ### Patch Changes
