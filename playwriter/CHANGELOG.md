@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.26
+
+### Patch Changes
+
+- **Fixed CDP commands sent too soon after attach**: Added 400ms delay after debugger attach before sending CDP commands to prevent race conditions
+- **Deferred page emulation setup**: Disabled early `setDeviceScaleFactorForMacOS` and `preserveSystemColorScheme` calls that could fail on newly attached pages
+- **Fixed main tab cleanup on detach**: `Target.detachedFromTarget` now properly removes main tabs from state, not just child sessions
+
 ## 0.0.25
 
 ### Patch Changes
