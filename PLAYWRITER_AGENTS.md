@@ -5,6 +5,10 @@ the extension uses chrome.debugger to manage the user browser
 read ./README.md for an overview of how this extension and mcp work
 read playwriter/src/prompt.md to understand how the MCP works
 
+## backward compatibility
+
+breaking changes to the WS protocol MUST never be made. publishing the extension code will never be instant, which means the extension must keep working with newer versions of the MCP and WS relay server.
+
 ## architecture
 
 - user installs the extension in chrome. we assume there is only one chrome window for now, the first opened. 
