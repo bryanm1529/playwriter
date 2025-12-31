@@ -94,6 +94,11 @@ const logger = {
   },
 }
 
+function getCallStack(): string {
+  const stack = new Error().stack || ''
+  return stack.split('\n').slice(2, 6).join(' <- ').replace(/\s+/g, ' ')
+}
+
 self.addEventListener('error', (event) => {
   const error = event.error
   const stack = error?.stack || `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`
@@ -339,7 +344,7 @@ function onDebuggerDetach(source: chrome.debugger.Debuggee, reason: `${chrome.de
     return
   }
 
-  logger.debug(`Manual debugger detachment detected for tab ${tabId}: ${reason}`)
+  logger.warn(`DISCONNECT: onDebuggerDetach tabId=${tabId} reason=${reason}`)
 
   const tab = store.getState().tabs.get(tabId)
   if (tab) {
@@ -431,7 +436,7 @@ function detachTab(tabId: number, shouldDetachDebugger: boolean): void {
     return
   }
 
-  logger.debug('Detaching tab:', tabId, 'sessionId:', tab.sessionId, 'shouldDetach:', shouldDetachDebugger)
+  logger.warn(`DISCONNECT: detachTab tabId=${tabId} shouldDetach=${shouldDetachDebugger} stack=${getCallStack()}`)
 
   sendMessage({
     method: 'forwardCDPEvent',
@@ -462,7 +467,7 @@ function detachTab(tabId: number, shouldDetachDebugger: boolean): void {
 }
 
 function closeConnection(reason: string): void {
-  logger.debug('Closing connection, reason:', reason)
+  logger.warn(`DISCONNECT: closeConnection reason=${reason} stack=${getCallStack()}`)
 
   chrome.debugger.onEvent.removeListener(onDebuggerEvent)
   chrome.debugger.onDetach.removeListener(onDebuggerDetach)
@@ -508,7 +513,7 @@ function startReplacedRetryLoop(): void {
 }
 
 function handleConnectionClose(reason: string, code: number): void {
-  logger.debug('Connection closed:', { reason, code })
+  logger.warn(`DISCONNECT: WS closed code=${code} reason=${reason || 'none'} stack=${getCallStack()}`)
 
   chrome.debugger.onEvent.removeListener(onDebuggerEvent)
   chrome.debugger.onDetach.removeListener(onDebuggerDetach)
@@ -608,7 +613,7 @@ async function ensureConnection(): Promise<void> {
   ws = socket
 
   ws.onmessage = async (event: MessageEvent) => {
-    let message: ExtensionCommandMessage
+    let message: any
     try {
       message = JSON.parse(event.data)
     } catch (error: any) {
@@ -617,9 +622,15 @@ async function ensureConnection(): Promise<void> {
       return
     }
 
+    // Handle ping from server - respond with pong to keep service worker alive
+    if (message.method === 'ping') {
+      sendMessage({ method: 'pong' })
+      return
+    }
+
     const response: ExtensionResponseMessage = { id: message.id }
     try {
-      response.result = await handleCommand(message)
+      response.result = await handleCommand(message as ExtensionCommandMessage)
     } catch (error: any) {
       logger.debug('Error handling command:', error)
       response.error = error.message
@@ -957,12 +968,13 @@ async function onActionClicked(tab: chrome.tabs.Tab): Promise<void> {
 
 resetDebugger()
 
-chrome.contextMenus.remove('playwriter-pin-element').catch(() => {})
-chrome.contextMenus.create({
-  id: 'playwriter-pin-element',
-  title: 'Copy Playwriter Element Reference',
-  contexts: ['all'],
-  visible: false,
+chrome.contextMenus.remove('playwriter-pin-element').catch(() => {}).finally(() => {
+  chrome.contextMenus.create({
+    id: 'playwriter-pin-element',
+    title: 'Copy Playwriter Element Reference',
+    contexts: ['all'],
+    visible: false,
+  })
 })
 
 function updateContextMenuVisibility(): void {
