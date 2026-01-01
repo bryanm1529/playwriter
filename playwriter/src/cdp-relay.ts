@@ -370,7 +370,7 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
 
         // Add client first so it can receive Target.attachedToTarget events
         playwrightClients.set(clientId, { id: clientId, ws })
-        logger?.log(chalk.green(`Playwright client connected: ${clientId} (${playwrightClients.size} total)`))
+        logger?.log(chalk.green(`Playwright client connected: ${clientId} (${playwrightClients.size} total) (extension? ${!!extensionWs}) (${connectedTargets.size} pages)`))
 
         // Auto-create initial tab if enabled and no targets exist
         if (process.env.PLAYWRITER_AUTO_ENABLE && extensionWs && connectedTargets.size === 0) {
