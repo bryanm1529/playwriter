@@ -266,6 +266,9 @@ async function ensureRelayServer(): Promise<void> {
   const serverProcess = spawn(process.execPath, [scriptPath], {
     detached: true,
     stdio: 'ignore',
+    env: {
+      ...process.env,
+    },
   })
 
   serverProcess.unref()
@@ -467,53 +470,68 @@ const promptContent =
   fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'prompt.md'), 'utf-8') +
   `\n\nfor debugging internal playwriter errors, check playwriter relay server logs at: ${LOG_FILE_PATH}`
 
-server.resource('debugger-api', 'https://playwriter.dev/resources/debugger-api.md', { mimeType: 'text/plain' }, async () => {
-  const packageJsonPath = require.resolve('playwriter/package.json')
-  const packageDir = path.dirname(packageJsonPath)
-  const content = fs.readFileSync(path.join(packageDir, 'dist', 'debugger-api.md'), 'utf-8')
+server.resource(
+  'debugger-api',
+  'https://playwriter.dev/resources/debugger-api.md',
+  { mimeType: 'text/plain' },
+  async () => {
+    const packageJsonPath = require.resolve('playwriter/package.json')
+    const packageDir = path.dirname(packageJsonPath)
+    const content = fs.readFileSync(path.join(packageDir, 'dist', 'debugger-api.md'), 'utf-8')
 
-  return {
-    contents: [
-      {
-        uri: 'https://playwriter.dev/resources/debugger-api.md',
-        text: content,
-        mimeType: 'text/plain',
-      },
-    ],
-  }
-})
+    return {
+      contents: [
+        {
+          uri: 'https://playwriter.dev/resources/debugger-api.md',
+          text: content,
+          mimeType: 'text/plain',
+        },
+      ],
+    }
+  },
+)
 
-server.resource('editor-api', 'https://playwriter.dev/resources/editor-api.md', { mimeType: 'text/plain' }, async () => {
-  const packageJsonPath = require.resolve('playwriter/package.json')
-  const packageDir = path.dirname(packageJsonPath)
-  const content = fs.readFileSync(path.join(packageDir, 'dist', 'editor-api.md'), 'utf-8')
+server.resource(
+  'editor-api',
+  'https://playwriter.dev/resources/editor-api.md',
+  { mimeType: 'text/plain' },
+  async () => {
+    const packageJsonPath = require.resolve('playwriter/package.json')
+    const packageDir = path.dirname(packageJsonPath)
+    const content = fs.readFileSync(path.join(packageDir, 'dist', 'editor-api.md'), 'utf-8')
 
-  return {
-    contents: [
-      {
-        uri: 'https://playwriter.dev/resources/editor-api.md',
-        text: content,
-        mimeType: 'text/plain',
-      },
-    ],
-  }
-})
+    return {
+      contents: [
+        {
+          uri: 'https://playwriter.dev/resources/editor-api.md',
+          text: content,
+          mimeType: 'text/plain',
+        },
+      ],
+    }
+  },
+)
 
-server.resource('styles-api', 'https://playwriter.dev/resources/styles-api.md', { mimeType: 'text/plain' }, async () => {
-  const packageJsonPath = require.resolve('playwriter/package.json')
-  const packageDir = path.dirname(packageJsonPath)
-  const content = fs.readFileSync(path.join(packageDir, 'dist', 'styles-api.md'), 'utf-8')
+server.resource(
+  'styles-api',
+  'https://playwriter.dev/resources/styles-api.md',
+  { mimeType: 'text/plain' },
+  async () => {
+    const packageJsonPath = require.resolve('playwriter/package.json')
+    const packageDir = path.dirname(packageJsonPath)
+    const content = fs.readFileSync(path.join(packageDir, 'dist', 'styles-api.md'), 'utf-8')
 
-  return {
-    contents: [
-      {
-        uri: 'https://playwriter.dev/resources/styles-api.md',
-        text: content,
-        mimeType: 'text/plain',
-      },
-    ],
-  }
-})
+    return {
+      contents: [
+        {
+          uri: 'https://playwriter.dev/resources/styles-api.md',
+          text: content,
+          mimeType: 'text/plain',
+        },
+      ],
+    }
+  },
+)
 
 server.tool(
   'execute',
