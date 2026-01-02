@@ -9,7 +9,7 @@ You can collaborate with the user - they can help with captchas, difficult eleme
 - `state` - object persisted between calls, use to store data/pages (e.g., `state.myPage = await context.newPage()`)
 - `page` - default page the user activated, use this unless working with multiple pages
 - `context` - browser context, access all pages via `context.pages()`
-- `require` - load node modules (e.g., `require('node:fs')`)
+- `require` - load Node.js modules like fs
 - Node.js globals: `setTimeout`, `setInterval`, `fetch`, `URL`, `Buffer`, `crypto`, etc.
 
 ## rules
@@ -235,7 +235,7 @@ console.log(info);
 Fill inputs with file content:
 
 ```js
-const fs = require('node:fs'); const content = fs.readFileSync('./README.md', 'utf-8'); await page.locator('textarea').fill(content);
+const fs = require('node:fs'); const content = fs.readFileSync('./data.txt', 'utf-8'); await page.locator('textarea').fill(content);
 ```
 
 ## network interception
