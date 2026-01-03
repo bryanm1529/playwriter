@@ -214,6 +214,89 @@ Jetski exposes 17+ browser tools (`capture_browser_screenshot`, `browser_click_e
 
 The irony is that by trying to make browser control "simpler" with dedicated tools, these integrations make it slower, less capable, and waste context window that could be used for actual work.
 
+### vs Claude Code Browser Extension
+
+Claude Code has a built-in Chrome extension ("Claude in Chrome") that uses Native Messaging API with a hybrid approach: screenshots for visual understanding and DOM/JavaScript for interactions.
+
+**Works Everywhere Claude's Extension Doesn't:**
+
+- **Windows WSL support** - Claude's extension doesn't work in WSL because Native Messaging requires Windows-native Chrome. Playwriter uses WebSocket on localhost:19988, so agents running in WSL can control Chrome on your Windows host
+- **Any MCP-compatible agent** - Not locked to Claude. Works with GPT, Gemini, local models, or any CLI tool that supports MCP
+- **Devcontainers & VMs** - Run your agent in an isolated environment while controlling Chrome on your host machine
+
+**Context Efficiency:**
+
+Claude's extension sends screenshots to the LLM for visual understanding, then uses DOM inspection for interactions. Playwriter uses accessibility snapshots instead - structured text describing interactive elements with their roles, names, and states:
+
+| Approach | What's sent to LLM | Typical size |
+|----------|-------------------|--------------|
+| Claude's extension | Screenshots | 100KB-1MB+ per image |
+| Playwriter | Accessibility snapshots | 5-20KB text |
+
+**Full Playwright API vs Step-by-Step Navigation:**
+
+Claude's extension navigates pages step-by-step with screenshots. Playwriter exposes the complete Playwright API through a single `execute` tool - LLMs already know Playwright from training data:
+
+```js
+// Complex interactions in one call
+await page.locator('tr').filter({ hasText: 'John' }).locator('button').click();
+const [download] = await Promise.all([
+  page.waitForEvent('download'),
+  page.click('button.export')
+]);
+await download.saveAs('/tmp/report.pdf');
+```
+
+**Advanced DevTools Features:**
+
+Playwriter provides capabilities Claude's extension doesn't have:
+
+```js
+// Set breakpoints and inspect variables at runtime
+const dbg = createDebugger({ cdp });
+await dbg.setBreakpoint({ file: 'app.js', line: 42 });
+// when paused: await dbg.inspectLocalVariables()
+
+// Live-edit page scripts without reload
+const editor = createEditor({ cdp });
+await editor.edit({ url: 'app.js', oldString: 'DEBUG=false', newString: 'DEBUG=true' });
+
+// Inspect CSS like DevTools Styles panel
+const styles = await getStylesForLocator({ locator: page.locator('.btn'), cdp });
+
+// Intercept network requests for API reverse-engineering
+page.on('response', async res => {
+  if (res.url().includes('/api/')) state.responses.push(await res.json());
+});
+
+// Find React component source locations
+const source = await getReactSource({ locator: page.locator('aria-ref=e5') });
+// => { fileName: 'Button.tsx', lineNumber: 42 }
+```
+
+**User Collaboration Features:**
+
+- **Right-click → "Copy Playwriter Element Reference"** - Pin any element and reference it as `globalThis.playwriterPinnedElem1` in your automation code
+- **Vimium-style visual labels** - `showAriaRefLabels()` overlays clickable labels on all interactive elements
+- **Tab group organization** - Connected tabs are grouped together with a green "playwriter" label
+- **Bypass automation detection** - Disconnect the extension temporarily to pass bot detection (e.g., Google login), then reconnect
+
+**Summary:**
+
+| Feature | Claude's Extension | Playwriter |
+|---------|-------------------|------------|
+| Windows WSL | No | Yes |
+| Works with any agent | No (Claude only) | Yes (any MCP client) |
+| Context method | Screenshots | A11y snapshots (90% smaller) |
+| Full Playwright API | No | Yes |
+| Debugger (breakpoints) | No | Yes |
+| Live code editing | No | Yes |
+| CSS inspection | No | Yes |
+| Network interception | Limited | Full |
+| React source finding | No | Yes |
+| Right-click pin element | No | Yes |
+| Raw CDP access | No | Yes |
+
 ## Architecture
 
 ```
