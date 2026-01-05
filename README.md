@@ -95,24 +95,25 @@ server.close()
 
 ### Visual Aria Ref Labels
 
-Playwriter includes Vimium-style visual labels that overlay interactive elements, making it easy for AI agents to identify and click elements from screenshots. These functions are available in the MCP context.
+Playwriter includes Vimium-style visual labels that overlay interactive elements, making it easy for AI agents to identify and click elements from screenshots. The `screenshotWithAccessibilityLabels` function is available in the MCP context.
 
 ```javascript
-// Show labels on all visible interactive elements
-const { snapshot, labelCount } = await showAriaRefLabels({ page })
-console.log(`Showing ${labelCount} labels`)
+// Take a screenshot with labels overlaid on interactive elements
+// Labels are shown, screenshot is captured, then labels are removed
+await screenshotWithAccessibilityLabels({ page })
+// Image and accessibility snapshot are automatically included in MCP response
 
-// Take a screenshot with labels visible
-await page.screenshot({ path: '/tmp/labeled-page.png' })
-
-// Use the snapshot to find elements, then interact using aria-ref selector
+// Use the snapshot from the response to find elements, then interact using aria-ref selector
 await page.locator('aria-ref=e5').click()
 
-// Labels auto-hide after 30 seconds, or remove manually:
-await hideAriaRefLabels({ page })
+// Can take multiple screenshots in one execution
+await screenshotWithAccessibilityLabels({ page })
+await page.click('button')
+await screenshotWithAccessibilityLabels({ page })
+// Both images are included in the response
 ```
 
-**Important:** Labels auto-hide after 30 seconds to prevent stale labels. If the page HTML changes (navigation, dynamic content), call `showAriaRefLabels()` again to get fresh labels matching the current DOM.
+The function automatically shows labels, takes a screenshot, hides labels, and includes both the image and accessibility snapshot in the MCP response. Screenshots are saved to `./tmp/` with unique filenames.
 
 **Features:**
 - **Role filtering** - Only shows labels for interactive elements (buttons, links, inputs, etc.)
@@ -277,7 +278,7 @@ const source = await getReactSource({ locator: page.locator('aria-ref=e5') });
 **User Collaboration Features:**
 
 - **Right-click → "Copy Playwriter Element Reference"** - Pin any element and reference it as `globalThis.playwriterPinnedElem1` in your automation code
-- **Vimium-style visual labels** - `showAriaRefLabels()` overlays clickable labels on all interactive elements
+- **Vimium-style visual labels** - `screenshotWithAccessibilityLabels()` captures screenshots with clickable labels on all interactive elements
 - **Tab group organization** - Connected tabs are grouped together with a green "playwriter" label
 - **Bypass automation detection** - Disconnect the extension temporarily to pass bot detection (e.g., Google login), then reconnect
 

@@ -21,7 +21,7 @@ import { Editor } from './editor.js'
 import { getStylesForLocator, formatStylesAsText, type StylesResult } from './styles.js'
 import { getReactSource, type ReactSourceLocation } from './react-source.js'
 import { ScopedFS } from './scoped-fs.js'
-import { showAriaRefLabels, hideAriaRefLabels } from './aria-snapshot.js'
+import { screenshotWithAccessibilityLabels, type ScreenshotResult } from './aria-snapshot.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -86,8 +86,7 @@ interface VMContext {
   getStylesForLocator: (options: { locator: any }) => Promise<StylesResult>
   formatStylesAsText: (styles: StylesResult) => string
   getReactSource: (options: { locator: any }) => Promise<ReactSourceLocation | null>
-  showAriaRefLabels: (options: { page: Page; interactiveOnly?: boolean }) => Promise<{ snapshot: string; labelCount: number }>
-  hideAriaRefLabels: (options: { page: Page }) => Promise<void>
+  screenshotWithAccessibilityLabels: (options: { page: Page; interactiveOnly?: boolean }) => Promise<void>
   require: NodeRequire
   import: (specifier: string) => Promise<any>
 }
@@ -864,6 +863,13 @@ server.tool(
         return getReactSource({ locator: options.locator, cdp })
       }
 
+      // Collector for screenshots taken during this execution
+      const screenshotCollector: ScreenshotResult[] = []
+
+      const screenshotWithAccessibilityLabelsFn = async (options: { page: Page; interactiveOnly?: boolean }) => {
+        return screenshotWithAccessibilityLabels({ ...options, collector: screenshotCollector })
+      }
+
       let vmContextObj: VMContextWithGlobals = {
         page,
         context,
@@ -880,8 +886,7 @@ server.tool(
         getStylesForLocator: getStylesForLocatorFn,
         formatStylesAsText,
         getReactSource: getReactSourceFn,
-        showAriaRefLabels,
-        hideAriaRefLabels,
+        screenshotWithAccessibilityLabels: screenshotWithAccessibilityLabelsFn,
         resetPlaywright: async () => {
           const { page: newPage, context: newContext } = await resetConnection()
 
@@ -901,8 +906,7 @@ server.tool(
             getStylesForLocator: getStylesForLocatorFn,
             formatStylesAsText,
             getReactSource: getReactSourceFn,
-            showAriaRefLabels,
-            hideAriaRefLabels,
+            screenshotWithAccessibilityLabels: screenshotWithAccessibilityLabelsFn,
             resetPlaywright: vmContextObj.resetPlaywright,
             require: sandboxedRequire,
             // TODO --experimental-vm-modules is needed to make import work in vm
@@ -943,6 +947,13 @@ server.tool(
         responseText += 'Code executed successfully (no output)'
       }
 
+      // Add screenshot info to response text
+      for (const screenshot of screenshotCollector) {
+        responseText += `\nScreenshot saved to: ${screenshot.path}\n`
+        responseText += `Labels shown: ${screenshot.labelCount}\n\n`
+        responseText += `Accessibility snapshot:\n${screenshot.snapshot}\n`
+      }
+
       const MAX_LENGTH = 6000
       let finalText = responseText.trim()
       if (finalText.length > MAX_LENGTH) {
@@ -951,14 +962,24 @@ server.tool(
           `\n\n[Truncated to ${MAX_LENGTH} characters. Better manage your logs or paginate them to read the full logs]`
       }
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: finalText,
-          },
-        ],
+      // Build content array with text and any collected screenshots
+      const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+        {
+          type: 'text',
+          text: finalText,
+        },
+      ]
+
+      // Add all collected screenshots as images
+      for (const screenshot of screenshotCollector) {
+        content.push({
+          type: 'image',
+          data: screenshot.base64,
+          mimeType: screenshot.mimeType,
+        })
       }
+
+      return { content }
     } catch (error: any) {
       const errorStack = error.stack || error.message
       const isTimeoutError = error instanceof CodeExecutionTimeoutError || error.name === 'TimeoutError'

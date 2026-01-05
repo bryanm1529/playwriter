@@ -2307,6 +2307,76 @@ describe('MCP Server Tests', () => {
         console.log(`Screenshots saved to: ${assetsDir}`)
     }, 120000)
 
+    it('should take screenshot with accessibility labels via MCP execute tool', async () => {
+        const browserContext = getBrowserContext()
+        const serviceWorker = await getExtensionServiceWorker(browserContext)
+
+        const page = await browserContext.newPage()
+        await page.setContent(`
+            <html>
+                <body>
+                    <button id="submit-btn">Submit Form</button>
+                    <a href="/about">About Us</a>
+                    <input type="text" placeholder="Enter your name" />
+                </body>
+            </html>
+        `)
+        await page.bringToFront()
+
+        await serviceWorker.evaluate(async () => {
+            await globalThis.toggleExtensionForActiveTab()
+        })
+        await new Promise(r => setTimeout(r, 400))
+
+        // Take screenshot with accessibility labels via MCP
+        const result = await client.callTool({
+            name: 'execute',
+            arguments: {
+                code: js`
+                    let testPage;
+                    for (const p of context.pages()) {
+                        const html = await p.content();
+                        if (html.includes('submit-btn')) { testPage = p; break; }
+                    }
+                    if (!testPage) throw new Error('Test page not found');
+                    await screenshotWithAccessibilityLabels({ page: testPage });
+                `,
+                timeout: 15000,
+            },
+        })
+
+        expect(result.isError).toBeFalsy()
+
+        // Verify response has both text and image content
+        const content = result.content as any[]
+        expect(content.length).toBe(2)
+
+        // Check text content
+        const textContent = content.find(c => c.type === 'text')
+        expect(textContent).toBeDefined()
+        expect(textContent.text).toContain('Screenshot saved to:')
+        expect(textContent.text).toContain('.jpg')
+        expect(textContent.text).toContain('Labels shown:')
+        expect(textContent.text).toContain('Accessibility snapshot:')
+        expect(textContent.text).toContain('Submit Form')
+
+        // Check image content
+        const imageContent = content.find(c => c.type === 'image')
+        expect(imageContent).toBeDefined()
+        expect(imageContent.mimeType).toBe('image/jpeg')
+        expect(imageContent.data).toBeDefined()
+        expect(imageContent.data.length).toBeGreaterThan(100) // base64 data should be substantial
+
+        // Verify the image is valid JPEG by checking base64
+        const buffer = Buffer.from(imageContent.data, 'base64')
+        const dimensions = imageSize(buffer)
+        expect(dimensions.type).toBe('jpg')
+        expect(dimensions.width).toBeGreaterThan(0)
+        expect(dimensions.height).toBeGreaterThan(0)
+
+        await page.close()
+    }, 60000)
+
 })
 
 

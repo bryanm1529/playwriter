@@ -206,23 +206,22 @@ const matches = await editor.grep({ regex: /console\.log/ });
 await editor.edit({ url: matches[0].url, oldString: 'DEBUG = false', newString: 'DEBUG = true' });
 ```
 
-**showAriaRefLabels** - overlay Vimium-style visual labels on interactive elements. Useful for taking screenshots where you can see element references. Labels auto-hide after 30 seconds. Call again if page HTML changes or scrolls to get fresh labels. Use a timeout of 10 seconds at least.
+**screenshotWithAccessibilityLabels** - take a screenshot with Vimium-style visual labels overlaid on interactive elements. Shows labels, captures screenshot, then removes labels. The image and accessibility snapshot are automatically included in the response. Can be called multiple times to capture multiple screenshots. Use a timeout of 10 seconds at least.
 
 ```js
-const { snapshot, labelCount } = await showAriaRefLabels({ page });
-console.log(`Showing ${labelCount} labels`);
-await page.screenshot({ path: '/tmp/labeled-page.png' });
-// Use aria-ref from snapshot to interact
+await screenshotWithAccessibilityLabels({ page });
+// Image and accessibility snapshot are automatically included in response
+// Use aria-ref from snapshot to interact with elements
 await page.locator('aria-ref=e5').click();
+
+// Can take multiple screenshots in one execution
+await screenshotWithAccessibilityLabels({ page });
+await page.click('button');
+await screenshotWithAccessibilityLabels({ page });
+// Both images are included in the response
 ```
 
 Labels are color-coded: yellow=links, orange=buttons, coral=inputs, pink=checkboxes, peach=sliders, salmon=menus, amber=tabs.
-
-**hideAriaRefLabels** - manually remove labels before the 30-second auto-hide:
-
-```js
-await hideAriaRefLabels({ page });
-```
 
 ## pinned elements
 
