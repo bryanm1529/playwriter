@@ -1,9 +1,20 @@
 import type { Page, Locator, ElementHandle } from 'playwright-core'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 
 export interface AriaRef {
   role: string
   name: string
   ref: string
+}
+
+export interface ScreenshotResult {
+  path: string
+  base64: string
+  mimeType: 'image/jpeg'
+  snapshot: string
+  labelCount: number
 }
 
 export interface AriaSnapshotResult {
@@ -17,7 +28,7 @@ export interface AriaSnapshotResult {
 
 const LABELS_CONTAINER_ID = '__playwriter_labels__'
 
-// Roles that represent truly interactive elements (can be clicked, typed into, etc.)
+// Roles that represent interactive elements (clickable, typeable) and media elements
 const INTERACTIVE_ROLES = new Set([
   'button',
   'link',
@@ -35,6 +46,10 @@ const INTERACTIVE_ROLES = new Set([
   'option',
   'tab',
   'treeitem',
+  // Media elements - useful for visual tasks
+  'img',
+  'video',
+  'audio',
 ])
 
 // Color categories for different role types - warm color scheme
@@ -63,6 +78,10 @@ const ROLE_COLORS: Record<string, [string, string, string]> = {
   tab: ['#FFE082', '#FFD54F', '#FFC107'],
   option: ['#FFE082', '#FFD54F', '#FFC107'],
   treeitem: ['#FFE082', '#FFD54F', '#FFC107'],
+  // Media elements - light blue
+  img: ['#B3E5FC', '#81D4FA', '#4FC3F7'],
+  video: ['#B3E5FC', '#81D4FA', '#4FC3F7'],
+  audio: ['#B3E5FC', '#81D4FA', '#4FC3F7'],
 }
 
 // Default yellow for unknown roles
@@ -470,4 +489,61 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
 
     doc.getElementById(id)?.remove()
   }, LABELS_CONTAINER_ID)
+}
+
+/**
+ * Take a screenshot with accessibility labels overlaid on interactive elements.
+ * Shows Vimium-style labels, captures the screenshot, then removes the labels.
+ * The screenshot is automatically included in the MCP response.
+ *
+ * @param collector - Array to collect screenshots (passed by MCP execute tool)
+ *
+ * @example
+ * ```ts
+ * await screenshotWithAccessibilityLabels({ page })
+ * // Screenshot is automatically included in the MCP response
+ * // Use aria-ref from the snapshot to interact with elements
+ * await page.locator('aria-ref=e5').click()
+ * ```
+ */
+export async function screenshotWithAccessibilityLabels({ page, interactiveOnly = true, collector }: {
+  page: Page
+  interactiveOnly?: boolean
+  collector: ScreenshotResult[]
+}): Promise<void> {
+  // Show labels and get snapshot
+  const { snapshot, labelCount } = await showAriaRefLabels({ page, interactiveOnly })
+
+  // Generate unique filename with timestamp
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).slice(2, 6)
+  const filename = `playwriter-screenshot-${timestamp}-${random}.jpg`
+  
+  // Use ./tmp folder (gitignored) instead of system temp
+  const tmpDir = path.join(process.cwd(), 'tmp')
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true })
+  }
+  const screenshotPath = path.join(tmpDir, filename)
+
+  // Take screenshot
+  const buffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+  
+  // Save to file
+  fs.writeFileSync(screenshotPath, buffer)
+  
+  // Convert to base64
+  const base64 = buffer.toString('base64')
+
+  // Hide labels
+  await hideAriaRefLabels({ page })
+
+  // Add to collector array
+  collector.push({
+    path: screenshotPath,
+    base64,
+    mimeType: 'image/jpeg',
+    snapshot,
+    labelCount,
+  })
 }
