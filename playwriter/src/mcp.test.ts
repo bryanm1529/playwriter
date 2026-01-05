@@ -2314,10 +2314,58 @@ describe('MCP Server Tests', () => {
         const page = await browserContext.newPage()
         await page.setContent(`
             <html>
+                <head>
+                    <style>
+                        body {
+                            margin: 0;
+                            background: #e8f4f8;
+                            position: relative;
+                            min-height: 100vh;
+                        }
+                        .controls {
+                            padding: 20px;
+                            position: relative;
+                            z-index: 10;
+                        }
+                        .grid-marker {
+                            position: absolute;
+                            background: rgba(255, 100, 100, 0.3);
+                            border: 1px solid #ff6464;
+                            font-size: 10px;
+                            color: #333;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        }
+                        .h-marker {
+                            left: 0;
+                            width: 100%;
+                            height: 20px;
+                        }
+                        .v-marker {
+                            top: 0;
+                            height: 100%;
+                            width: 20px;
+                        }
+                    </style>
+                </head>
                 <body>
-                    <button id="submit-btn">Submit Form</button>
-                    <a href="/about">About Us</a>
-                    <input type="text" placeholder="Enter your name" />
+                    <div class="controls">
+                        <button id="submit-btn">Submit Form</button>
+                        <a href="/about">About Us</a>
+                        <input type="text" placeholder="Enter your name" />
+                    </div>
+                    <!-- Horizontal markers every 200px -->
+                    <div class="grid-marker h-marker" style="top: 200px;">200px</div>
+                    <div class="grid-marker h-marker" style="top: 400px;">400px</div>
+                    <div class="grid-marker h-marker" style="top: 600px;">600px</div>
+                    <!-- Vertical markers every 200px -->
+                    <div class="grid-marker v-marker" style="left: 200px;">200</div>
+                    <div class="grid-marker v-marker" style="left: 400px;">400</div>
+                    <div class="grid-marker v-marker" style="left: 600px;">600</div>
+                    <div class="grid-marker v-marker" style="left: 800px;">800</div>
+                    <div class="grid-marker v-marker" style="left: 1000px;">1000</div>
+                    <div class="grid-marker v-marker" style="left: 1200px;">1200</div>
                 </body>
             </html>
         `)
@@ -2370,6 +2418,17 @@ describe('MCP Server Tests', () => {
         // Verify the image is valid JPEG by checking base64
         const buffer = Buffer.from(imageContent.data, 'base64')
         const dimensions = imageSize(buffer)
+        
+        // Get actual viewport size from page
+        const viewport = await page.evaluate(() => ({
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            outerWidth: window.outerWidth,
+            outerHeight: window.outerHeight,
+        }))
+        console.log('Screenshot dimensions:', dimensions.width, 'x', dimensions.height)
+        console.log('Window viewport:', viewport)
+        
         expect(dimensions.type).toBe('jpg')
         expect(dimensions.width).toBeGreaterThan(0)
         expect(dimensions.height).toBeGreaterThan(0)

@@ -31,6 +31,8 @@ After any action (click, submit, navigate), verify what happened:
 console.log('url:', page.url()); console.log(await accessibilitySnapshot({ page }).then(x => x.split('\n').slice(0, 30).join('\n')));
 ```
 
+For visually complex pages (grids, galleries, dashboards), use `screenshotWithAccessibilityLabels({ page })` instead to understand spatial layout.
+
 If nothing changed, try `await page.waitForLoadState('networkidle', {timeout: 3000})` or you may have clicked the wrong element.
 
 ## accessibility snapshots
@@ -65,6 +67,24 @@ Search for specific elements:
 ```js
 const snapshot = await accessibilitySnapshot({ page, search: /button|submit/i })
 ```
+
+## choosing between snapshot methods
+
+Both `accessibilitySnapshot` and `screenshotWithAccessibilityLabels` use the same `aria-ref` system, so you can combine them effectively.
+
+**Use `accessibilitySnapshot` when:**
+- Page has simple, semantic structure (articles, forms, lists)
+- You need to search for specific text or patterns
+- Token usage matters (text is smaller than images)
+- You need to process the output programmatically
+
+**Use `screenshotWithAccessibilityLabels` when:**
+- Page has complex visual layout (grids, galleries, dashboards, maps)
+- Spatial position matters (e.g., "first image", "top-left button")
+- DOM order doesn't match visual order
+- You need to understand the visual hierarchy
+
+**Combining both:** Use screenshot first to understand layout and identify target elements visually, then use `accessibilitySnapshot({ search: /pattern/ })` for efficient searching in subsequent calls.
 
 ## selector best practices
 
@@ -206,7 +226,9 @@ const matches = await editor.grep({ regex: /console\.log/ });
 await editor.edit({ url: matches[0].url, oldString: 'DEBUG = false', newString: 'DEBUG = true' });
 ```
 
-**screenshotWithAccessibilityLabels** - take a screenshot with Vimium-style visual labels overlaid on interactive elements. Shows labels, captures screenshot, then removes labels. The image and accessibility snapshot are automatically included in the response. Can be called multiple times to capture multiple screenshots. Use a timeout of 10 seconds at least.
+**screenshotWithAccessibilityLabels** - take a screenshot with Vimium-style visual labels overlaid on interactive elements. Shows labels, captures screenshot, then removes labels. The image and accessibility snapshot are automatically included in the response. Can be called multiple times to capture multiple screenshots. Use a timeout of **20 seconds** for complex pages.
+
+Prefer this for pages with grids, image galleries, maps, or complex visual layouts where spatial position matters. For simple text-heavy pages, `accessibilitySnapshot` with search is faster and uses fewer tokens.
 
 ```js
 await screenshotWithAccessibilityLabels({ page });
@@ -296,5 +318,6 @@ Examples of what playwriter can do:
 - Intercept network requests to reverse-engineer APIs and build SDKs
 - Scrape data by replaying paginated API calls instead of scrolling DOM
 - Get accessibility snapshot to find elements, then automate interactions
+- Use visual screenshots to understand complex layouts like image grids, dashboards, or maps
 - Debug issues by collecting logs and controlling the page simultaneously
 - Handle popups, downloads, iframes, and dialog boxes

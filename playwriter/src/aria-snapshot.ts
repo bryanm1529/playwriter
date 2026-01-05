@@ -93,7 +93,7 @@ const css = String.raw
 const LABEL_STYLES = css`
   .__pw_label__ {
     position: absolute;
-    font: bold 11px Helvetica, Arial, sans-serif;
+    font: bold 12px Helvetica, Arial, sans-serif;
     padding: 1px 4px;
     border-radius: 3px;
     color: black;
@@ -300,8 +300,8 @@ export async function showAriaRefLabels({ page, interactiveOnly = true }: {
       // Each rect is { left, top, right, bottom } in viewport coordinates
       const placedLabels: Array<{ left: number; top: number; right: number; bottom: number }> = []
 
-      // Estimate label dimensions (11px font + padding)
-      const LABEL_HEIGHT = 16
+      // Estimate label dimensions (12px font + padding)
+      const LABEL_HEIGHT = 17
       const LABEL_CHAR_WIDTH = 7 // approximate width per character
 
       // Parse alpha from rgb/rgba color string (getComputedStyle always returns these formats)
@@ -518,7 +518,7 @@ export async function screenshotWithAccessibilityLabels({ page, interactiveOnly 
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 6)
   const filename = `playwriter-screenshot-${timestamp}-${random}.jpg`
-  
+
   // Use ./tmp folder (gitignored) instead of system temp
   const tmpDir = path.join(process.cwd(), 'tmp')
   if (!fs.existsSync(tmpDir)) {
@@ -526,12 +526,20 @@ export async function screenshotWithAccessibilityLabels({ page, interactiveOnly 
   }
   const screenshotPath = path.join(tmpDir, filename)
 
-  // Take screenshot
-  const buffer = await page.screenshot({ type: 'jpeg', quality: 80 })
-  
+  // Get actual viewport size (innerWidth/innerHeight, not outer window size)
+  const viewport = await page.evaluate('(() => ({ width: window.innerWidth, height: window.innerHeight }))()') as { width: number; height: number }
+
+  // Take screenshot clipped to actual viewport (excludes browser chrome)
+  const buffer = await page.screenshot({
+    type: 'jpeg',
+    quality: 80,
+    scale: 'css',
+    clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
+  })
+
   // Save to file
   fs.writeFileSync(screenshotPath, buffer)
-  
+
   // Convert to base64
   const base64 = buffer.toString('base64')
 
