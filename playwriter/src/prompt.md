@@ -349,3 +349,8 @@ Examples of what playwriter can do:
 - Use visual screenshots to understand complex layouts like image grids, dashboards, or maps
 - Debug issues by collecting logs and controlling the page simultaneously
 - Handle popups, downloads, iframes, and dialog boxes
+
+
+## debugging playwriter issues
+
+if some internal critical error happens you can read your own relay ws logs to understand the issue, it will show logs from extension, mcp and ws server together. then you can create a gh issue using `gh issue create -R remorses/playwriter --title title --body body`. ask for user confirmation before doing this.
