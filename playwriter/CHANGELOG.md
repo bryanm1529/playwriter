@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.46
+
+### Bug Fixes
+
+- **Limit screenshot dimensions to 2000px**: Screenshots are now clipped to max 2000x2000 pixels to avoid Claude API rejection for many-image requests (Claude enforces 2000px limit when >20 images in a request)
+
 ## 0.0.45
 
 ### Bug Fixes
