@@ -7,66 +7,56 @@
     </picture>
     <br/>
     <br/>
-    <p>Like Playwright MCP but via extension. 80% less context window. 10x more capable (full playwright API)</p>
-    <br/>
-    <a href="https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe">
-        <strong>Install Extension from Chrome Web Store</strong>
-    </a>
-    <br/>
+    <p>Browser automation that just works. Auto-launches Chrome when needed, or uses existing tabs via extension. Full Playwright API, 80% less context bloat.</p>
     <br/>
 </div>
 
 ## Installation
 
-1. **Install the Chrome Extension**
+Add to your MCP client config (e.g., Claude Desktop's `claude_desktop_config.json`):
 
-   [**Install Extension**](https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe) - Install the [Browserwright MCP Extension](https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe) from the Chrome Web Store (or load it unpacked during development). Pin the extension to your Chrome toolbar for easy access.
+```json
+{
+  "mcpServers": {
+    "browserwright": {
+      "command": "npx",
+      "args": ["browserwright@latest"]
+    }
+  }
+}
+```
 
-2. **Connect to a Tab**
+**That's it.** Browserwright auto-launches Chrome with a persistent profile when you start using it. Your logins persist between sessions.
 
-   Click the Browserwright MCP extension icon on any tab you want to control. The icon will turn green when successfully connected.
+### Optional: Extension Mode
 
-   **Icon states:**
-   - **Gray:** Not connected
-   - **Green:** Connected and ready
-   - **Orange badge (...):** Connecting
-   - **Red badge (!):** Error
+For controlling tabs you're already using (with your logged-in sessions), install the [Chrome Extension](https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe):
 
-3. **Add MCP to Your Agent**
+1. Install from Chrome Web Store
+2. Click the extension icon on any tab to attach it
+3. Icon turns **green** when connected
 
-   Add the following configuration to your MCP client settings (e.g., Claude Desktop's `claude_desktop_config.json`):
-
-   ```json
-   {
-     "mcpServers": {
-       "browserwright": {
-         "command": "npx",
-         "args": ["browserwright@latest"]
-       }
-     }
-   }
-   ```
-
-   Restart your MCP client and you're ready to go! Your AI assistant can now control the browser through the extension.
+Browserwright automatically uses extension tabs if available, otherwise launches a new browser.
 
 ## Usage
 
 ### Using the MCP
 
-**Important:** Before using the MCP, you must [install](https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe) and enable the extension on at least one tab:
+Your AI assistant uses a single `execute` tool that runs Playwright code. Just ask it to do browser tasks:
 
-1. Pin the Browserwright extension to your Chrome toolbar (click the puzzle icon)
-2. Navigate to a tab you want to control
-3. Click the extension icon - it will turn green when connected
+- "Go to github.com and check my notifications"
+- "Fill out the contact form on this page"
+- "Scrape the product prices from this website"
 
-Once enabled on one or more tabs, your AI assistant can:
+**What your AI can do:**
 
-- Control all enabled tabs through the `execute` tool
-- Switch between tabs using playwright's context and page APIs
+- Navigate to any URL
+- Click, type, scroll, and interact with elements
+- Take screenshots and accessibility snapshots
+- Intercept network requests (great for API reverse-engineering)
+- Debug with breakpoints and inspect variables
+- Live-edit page scripts and CSS
 - Create new tabs programmatically
-- Run any Playwright code against your browser tabs
-
-The MCP will automatically start a relay server and connect to your enabled browser tabs.
 
 ### Using with Playwright
 
@@ -151,42 +141,41 @@ The function automatically shows labels, takes a screenshot, hides labels, and i
 | Salmon | Menu items                                 |
 | Amber  | Tabs, options                              |
 
-### Environment Variables
+### CLI Options
 
-#### `BROWSERWRIGHT_AUTO_ENABLE`
-
-When set, the MCP will automatically create an initial tab when a Playwright client connects and no tabs are currently enabled. This is useful for fully automated workflows where you don't want to manually click the extension icon.
-
-```json
-{
-  "mcpServers": {
-    "browserwright": {
-      "command": "npx",
-      "args": ["browserwright@latest"],
-      "env": {
-        "BROWSERWRIGHT_AUTO_ENABLE": "1"
-      }
-    }
-  }
-}
+```bash
+browserwright                    # Default: auto-launches Chrome if no extension tabs
+browserwright --launch           # Force launch mode (spawn new browser)
+browserwright --headless         # Run in headless mode
+browserwright --isolated         # Use temp profile (clean session each time)
+browserwright --cdp <endpoint>   # Connect to existing browser via CDP
+browserwright --channel chrome-beta  # Use Chrome Beta/Dev/Edge
 ```
 
-With this setting, when your AI agent starts, it will immediately have a page to work with without requiring manual extension activation.
+### Environment Variables
 
-**Note:** The auto-created tab starts at `about:blank`. Your agent can then navigate it to any URL.
+| Variable | Description |
+|----------|-------------|
+| `BROWSERWRIGHT_PORT` | Relay server port (default: `19988`) |
+| `BROWSERWRIGHT_HOST` | Remote relay host for devcontainers/VMs |
+| `BROWSERWRIGHT_TOKEN` | Auth token for remote connections |
 
 ## Comparison
 
 ### vs Playwright MCP
 
-Browserwright uses a Chrome extension instead of launching a full new Chrome window. This approach has several benefits:
+Browserwright gives you the best of both worlds:
 
-- **Collaborate with your agent** - Work alongside the AI in the same browser, helping it when stuck on captchas or complex interactions
-- **Start on existing pages** - Launch the MCP on a page in your existing browser to replicate bugs exactly as they occur
-- **Reuse your extensions** - Keep using ad blockers, password managers, and other extensions you already have installed
-- **Bypass automation detection** - Disable CDP/automation temporarily by disconnecting the extension to bypass detection systems like Google login, then reconnect to continue automation. With Playwright's headless Chrome, automation is always detected and blocks your workflow
-- **Less resource usage** - No need to spawn a separate Chrome instance, saving memory and CPU
-- **Single browser workflow** - Everything happens in your main Chrome browser, no switching between windows
+**Auto-launch mode** (like Playwright MCP):
+- Just works - auto-launches Chrome with persistent profile
+- Logins persist between sessions
+- No extension needed
+
+**Extension mode** (unique to Browserwright):
+- Control your existing logged-in sessions
+- Work alongside the AI in the same browser
+- Bypass automation detection by temporarily disconnecting
+- Reuse ad blockers, password managers, and other extensions
 
 ### vs BrowserMCP
 

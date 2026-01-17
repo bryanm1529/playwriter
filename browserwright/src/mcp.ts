@@ -25,6 +25,7 @@ import { screenshotWithAccessibilityLabels, type ScreenshotResult } from './aria
 import { getCleanHTML, type GetCleanHTMLOptions } from './clean-html.js'
 import { RefRegistry, addShortRefPrefix } from './ref-registry.js'
 import { filterSnapshot, type SnapshotFilterOptions } from './snapshot-filter.js'
+import { launchBrowser, type LaunchOptions, type LaunchedBrowser, type BrowserChannel } from './launcher.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -59,6 +60,8 @@ interface State {
   page: Page | null
   browser: Browser | null
   context: BrowserContext | null
+  launchMode: boolean
+  launchedBrowser: LaunchedBrowser | null
 }
 
 interface VMContext {
@@ -111,7 +114,12 @@ const state: State = {
   page: null,
   browser: null,
   context: null,
+  launchMode: false,
+  launchedBrowser: null,
 }
+
+// Launch options set via CLI, used when launchMode is true
+let launchOptions: LaunchOptions = {}
 
 const userState: Record<string, any> = {}
 
@@ -278,6 +286,8 @@ function clearConnectionState() {
   state.browser = null
   state.page = null
   state.context = null
+  // Don't clear launchMode - that's set once at startup
+  // Don't clear launchedBrowser - that persists across reconnections
 }
 
 function getLogServerUrl(): string {
@@ -406,13 +416,47 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
     return { browser: state.browser, page: state.page }
   }
 
+  // Launch mode: use launched browser instead of relay server
+  if (state.launchMode) {
+    return ensureLaunchModeConnection()
+  }
+
+  // Extension mode: try to connect via CDP relay server
   const remote = getRemoteConfig()
   if (!remote) {
     await ensureRelayServer()
   }
 
   const cdpEndpoint = getCdpUrl(remote || { port: RELAY_PORT })
-  const browser = await chromium.connectOverCDP(cdpEndpoint)
+
+  let browser: Browser
+  let hasExtensionTabs = false
+
+  try {
+    browser = await chromium.connectOverCDP(cdpEndpoint)
+    const contexts = browser.contexts()
+    const context = contexts.length > 0 ? contexts[0] : null
+    hasExtensionTabs = context !== null && context.pages().length > 0
+
+    if (!hasExtensionTabs) {
+      // No tabs from extension - close this connection and fall back to launch mode
+      await browser.close()
+    }
+  } catch (error: any) {
+    // Connection failed - will fall back to launch mode
+    hasExtensionTabs = false
+  }
+
+  // Auto-fallback: if no extension tabs, launch a browser automatically
+  if (!hasExtensionTabs) {
+    mcpLog('No extension tabs connected - auto-launching browser for seamless experience')
+    state.launchMode = true
+    launchOptions = { headless: false } // Headed by default for visibility
+    return ensureLaunchModeConnection()
+  }
+
+  // Extension mode: we have tabs, proceed with connection
+  browser = await chromium.connectOverCDP(cdpEndpoint)
 
   // Clear connection state when browser disconnects (e.g., extension reconnects, relay server restarts)
   browser.on('disconnected', () => {
@@ -429,9 +473,6 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
   })
 
   const pages = context.pages()
-  if (pages.length === 0) {
-    throw new Error(NO_TABS_ERROR)
-  }
   const page = pages[0]
 
   // Set up console listener for all existing pages
@@ -450,6 +491,45 @@ async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
   state.isConnected = true
 
   return { browser, page }
+}
+
+/**
+ * Ensure connection in launch mode - uses launched browser with persistent profile
+ */
+async function ensureLaunchModeConnection(): Promise<{ browser: Browser; page: Page }> {
+  // If we don't have a launched browser yet, launch one
+  if (!state.launchedBrowser) {
+    mcpLog('Launch mode: starting browser...')
+    state.launchedBrowser = await launchBrowser(launchOptions)
+    mcpLog(`Launch mode: browser started (${state.launchedBrowser.mode})`)
+  }
+
+  const { context, browser } = state.launchedBrowser
+
+  // Set up console listener for all future pages
+  context.on('page', (page) => {
+    setupPageConsoleListener(page)
+  })
+
+  const pages = context.pages()
+  if (pages.length === 0) {
+    // In launch mode, we can create a page since we own the browser
+    await context.newPage()
+  }
+  const page = context.pages()[0]
+
+  // Set up console listener for all existing pages
+  context.pages().forEach((p) => setupPageConsoleListener(p))
+
+  await preserveSystemColorScheme(context)
+  await setDeviceScaleFactorForMacOS(context)
+
+  state.browser = browser
+  state.page = page
+  state.context = context
+  state.isConnected = true
+
+  return { browser: browser!, page }
 }
 
 async function getPageTargetId(page: Page): Promise<string> {
@@ -589,7 +669,7 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
 
 const server = new McpServer({
   name: 'browserwright',
-  title: 'The better playwright MCP: works as a browser extension. No context bloat. More capable.',
+  title: 'Browser automation that just works. Auto-launches Chrome when needed, or uses existing tabs via extension. Persistent logins across sessions.',
   version: '1.0.0',
 })
 
@@ -1138,12 +1218,30 @@ server.tool(
 server.tool(
   'browser_status',
   dedent`
-    Get Browserwright browser connection status. Use this to check if the extension is connected
-    and which tabs are available for automation. Returns helpful guidance if not connected.
+    Get Browserwright browser connection status. Shows current mode (extension or launched) and available tabs.
+    Usually not needed - just use 'execute' directly and Browserwright auto-launches Chrome if needed.
   `,
   {},
   async () => {
     try {
+      // Check if we're already in launch mode
+      if (state.launchMode && state.launchedBrowser) {
+        const context = state.launchedBrowser.context
+        const pages = context.pages()
+        const tabList = await Promise.all(
+          pages.map(async (p, i) => `${i + 1}. ${await p.title().catch(() => 'Unknown')}\n   ${p.url()}`),
+        )
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Launch mode active (persistent profile)\n${pages.length} tab(s):\n${tabList.join('\n')}`,
+            },
+          ],
+        }
+      }
+
+      // Check extension mode
       const remote = getRemoteConfig()
       if (!remote) {
         await ensureRelayServer()
@@ -1171,14 +1269,7 @@ server.tool(
           content: [
             {
               type: 'text',
-              text: dedent`
-                Extension connected but no tabs attached.
-
-                To attach a tab, the user can:
-                1. Press Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab
-                2. Click the Browserwright extension icon
-                3. Drag a tab into the 'browserwright' tab group
-              `,
+              text: `No extension tabs attached. Will auto-launch Chrome when you use 'execute'.`,
             },
           ],
         }
@@ -1190,45 +1281,18 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: `Connected with ${allTabs.length} tab(s):\n${tabList}`,
+            text: `Extension mode - ${allTabs.length} tab(s) attached:\n${tabList}`,
           },
         ],
       }
     } catch (error: any) {
-      const isConnectionError =
-        error.message?.includes('ECONNREFUSED') ||
-        error.message?.includes('not running') ||
-        error.message?.includes('No browser tabs')
-
-      if (isConnectionError) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: dedent`
-                Extension not connected or no tabs attached.
-
-                To connect, the user should:
-                1. Ensure the Browserwright extension is installed
-                2. Press Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab
-                3. Or click the Browserwright extension icon on the tab they want to control
-                4. Or drag a tab into the 'browserwright' tab group
-
-                Extension: https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe
-              `,
-            },
-          ],
-        }
-      }
-
       return {
         content: [
           {
             type: 'text',
-            text: `Error checking browser status: ${error.message}`,
+            text: `No browser connected yet. Will auto-launch Chrome when you use 'execute'.`,
           },
         ],
-        isError: true,
       }
     }
   },
@@ -1253,7 +1317,20 @@ async function checkRemoteServer({ host, port }: { host: string; port: number })
   }
 }
 
-export async function startMcp(options: { host?: string; token?: string } = {}) {
+export interface StartMcpOptions {
+  // Remote relay options
+  host?: string
+  token?: string
+  // Launch mode options (like official Playwright MCP)
+  launch?: boolean
+  headless?: boolean
+  userDataDir?: string
+  isolated?: boolean
+  cdpEndpoint?: string
+  channel?: BrowserChannel
+}
+
+export async function startMcp(options: StartMcpOptions = {}) {
   if (options.host) {
     process.env.BROWSERWRIGHT_HOST = options.host
   }
@@ -1261,13 +1338,55 @@ export async function startMcp(options: { host?: string; token?: string } = {}) 
     process.env.BROWSERWRIGHT_TOKEN = options.token
   }
 
-  const remote = getRemoteConfig()
-  if (!remote) {
-    await ensureRelayServer()
+  // Check if we're in launch mode (explicit --launch flag or --cdp endpoint)
+  const isLaunchMode = options.launch || options.cdpEndpoint
+
+  if (isLaunchMode) {
+    // Launch mode: spawn our own browser or connect to existing via CDP
+    state.launchMode = true
+    launchOptions = {
+      headless: options.headless,
+      userDataDir: options.userDataDir,
+      isolated: options.isolated,
+      cdpEndpoint: options.cdpEndpoint,
+      channel: options.channel,
+    }
+
+    mcpLog('Browserwright MCP starting in launch mode')
+    if (options.cdpEndpoint) {
+      mcpLog(`Will connect to CDP endpoint: ${options.cdpEndpoint}`)
+    } else if (options.isolated) {
+      mcpLog('Will launch browser with isolated (temp) profile')
+    } else {
+      mcpLog('Will launch browser with persistent profile')
+    }
   } else {
-    mcpLog(`Using remote CDP relay server: ${remote.host}:${remote.port}`)
-    await checkRemoteServer(remote)
+    // Extension mode: use relay server
+    const remote = getRemoteConfig()
+    if (!remote) {
+      await ensureRelayServer()
+    } else {
+      mcpLog(`Using remote CDP relay server: ${remote.host}:${remote.port}`)
+      await checkRemoteServer(remote)
+    }
   }
+
   const transport = new StdioServerTransport()
   await server.connect(transport)
+
+  // In launch mode, close the browser when MCP disconnects
+  if (isLaunchMode) {
+    process.on('SIGINT', async () => {
+      if (state.launchedBrowser) {
+        await state.launchedBrowser.close()
+      }
+      process.exit(0)
+    })
+    process.on('SIGTERM', async () => {
+      if (state.launchedBrowser) {
+        await state.launchedBrowser.close()
+      }
+      process.exit(0)
+    })
+  }
 }

@@ -1,6 +1,6 @@
 # Browserwright User Guide
 
-> Control your actual Chrome browser with AI - like Playwright, but for tabs you're already using.
+> Browser automation that just works. Auto-launches Chrome when needed, or uses existing tabs via extension.
 
 ## Table of Contents
 
@@ -15,20 +15,9 @@
 
 ## Quick Start
 
-Get Browserwright running in under 5 minutes.
+Get Browserwright running in 2 minutes.
 
-### Step 1: Install the Extension
-
-Load the extension in Chrome:
-
-1. Open `chrome://extensions/`
-2. Enable "Developer mode" (top right)
-3. Click "Load unpacked"
-4. Select the `extension/dist` folder
-
-**Or** install from Chrome Web Store (if published).
-
-### Step 2: Configure Your AI Agent
+### Step 1: Configure Your AI Agent
 
 Add to your MCP client config (e.g., Claude Desktop's `claude_desktop_config.json`):
 
@@ -43,32 +32,11 @@ Add to your MCP client config (e.g., Claude Desktop's `claude_desktop_config.jso
 }
 ```
 
-For local development:
+**That's it.** Browserwright auto-launches Chrome with a persistent profile. Your logins persist between sessions.
 
-```json
-{
-  "mcpServers": {
-    "browserwright": {
-      "command": "node",
-      "args": ["/home/sicmundus/browserwright/browserwright/bin.js"]
-    }
-  }
-}
-```
+### Step 2: Start Automating
 
-### Step 3: Connect a Tab
-
-Three ways to connect:
-
-1. **Keyboard shortcut**: Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac) on any tab
-2. **Click the icon**: Click the Browserwright extension icon
-3. **Tab group**: Drag any tab into the green "browserwright" tab group
-
-The extension icon turns **green** when connected.
-
-### Step 4: Start Automating
-
-Your AI agent now has access to the `execute` tool. Example:
+Your AI agent now has access to the `execute` tool. Just ask it to do browser tasks:
 
 ```js
 // Navigate and take a screenshot
@@ -77,12 +45,38 @@ const snapshot = await accessibilitySnapshot({ page });
 console.log(snapshot);
 ```
 
+### Optional: Extension Mode
+
+For controlling tabs you're already using (with your logged-in sessions):
+
+1. Install the [Chrome Extension](https://chromewebstore.google.com/detail/browserwright/jfeammnjpkecdekppnclgkkffahnhfhe)
+2. Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac) on any tab, or click the extension icon
+3. Icon turns **green** when connected
+
+Browserwright automatically uses extension tabs if available, otherwise launches a new browser.
+
 ---
 
 ## Core Concepts
 
 ### How Browserwright Works
 
+Browserwright operates in two modes:
+
+**Auto-launch mode** (default):
+```
+┌─────────────────┐                          ┌─────────────────┐
+│  Launched       │                          │   AI Agent      │
+│  Chrome         │◄─────── Playwright ──────┤   (Claude)      │
+│  (persistent    │                          │                 │
+│   profile)      │                          │  ┌───────────┐  │
+└─────────────────┘                          │  │  execute  │  │
+                                             │  │   tool    │  │
+                                             │  └───────────┘  │
+                                             └─────────────────┘
+```
+
+**Extension mode** (when tabs are attached):
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   Your Chrome   │     │  Relay Server    │     │   AI Agent      │
@@ -98,7 +92,7 @@ console.log(snapshot);
 └─────────────────┘
 ```
 
-**Key insight**: Browserwright doesn't spawn a new browser. It connects to tabs you're already using via Chrome's DevTools Protocol (CDP).
+**Key insight**: Browserwright automatically chooses the best mode. If you have extension tabs attached, it uses them (with your logged-in sessions). Otherwise, it launches a fresh Chrome with persistent profile.
 
 ### The Execute Tool
 
@@ -451,7 +445,16 @@ await page.waitForTimeout(5000); // Usually unnecessary
 
 ## Troubleshooting
 
-### Extension Icon is Gray
+### Browser Doesn't Launch
+
+**Problem**: Auto-launch mode isn't starting Chrome.
+
+**Solutions**:
+1. Make sure Chrome is installed
+2. Check for errors in MCP logs
+3. Try explicit launch: use `--launch` flag in config args
+
+### Extension Icon is Gray (Extension Mode)
 
 **Problem**: The extension isn't connected to the tab.
 
@@ -460,16 +463,6 @@ await page.waitForTimeout(5000); // Usually unnecessary
 2. Click the extension icon
 3. Refresh the page and try again
 4. Check that the relay server is running (`localhost:19988`)
-
-### "No browser tabs are connected"
-
-**Problem**: MCP can't find any attached tabs.
-
-**Solutions**:
-1. Attach at least one tab (see above)
-2. Check if Chrome is running
-3. Restart the MCP server
-4. Check relay server logs: `cat /tmp/browserwright/relay-server.log`
 
 ### Page Returns about:blank
 
@@ -526,15 +519,24 @@ if (await page.locator('.slow-element').isVisible()) {
 
 ---
 
+## CLI Options
+
+```bash
+browserwright                    # Auto-launches Chrome if no extension tabs
+browserwright --launch           # Force launch mode (spawn new browser)
+browserwright --headless         # Run in headless mode
+browserwright --isolated         # Use temp profile (clean session each time)
+browserwright --cdp <endpoint>   # Connect to existing browser via CDP
+browserwright --channel chrome-beta  # Use Chrome Beta/Dev/Edge
+```
+
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BROWSERWRIGHT_PORT` | Relay server port | `19988` |
-| `BROWSERWRIGHT_HOST` | Relay server host | `127.0.0.1` |
-| `BROWSERWRIGHT_TOKEN` | Authentication token (for remote) | none |
-| `BROWSERWRIGHT_AUTO_ENABLE` | Auto-create tab on connect | `false` |
-| `BROWSERWRIGHT_LOG_FILE_PATH` | Custom log file location | `/tmp/browserwright/relay-server.log` |
+| `BROWSERWRIGHT_HOST` | Remote relay host (for devcontainers/VMs) | none |
+| `BROWSERWRIGHT_TOKEN` | Auth token for remote connections | none |
 
 ---
 

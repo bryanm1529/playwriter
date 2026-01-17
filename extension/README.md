@@ -6,7 +6,7 @@ Control your actual Chrome browser with AI - like Playwright, but for tabs you'r
 
 ## What is Browserwright?
 
-Browserwright is a Chrome extension that enables AI assistants to connect to your existing Chrome instance without spawning a new browser or requiring Chrome to be started in CDP mode. This allows AI agents (Claude, Cursor, VS Code) to interact with your actual browser session through the Model Context Protocol.
+Browserwright is a Chrome extension that enables AI assistants to connect to your existing Chrome instance without spawning a new browser or requiring Chrome to be started in CDP mode. This allows AI agents (Claude, VS Code, or any MCP client) to interact with your actual browser session through the Model Context Protocol.
 
 ## Key Features
 
