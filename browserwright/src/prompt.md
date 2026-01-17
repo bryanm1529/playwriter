@@ -1,6 +1,8 @@
 # browserwright execute
 
-Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements. If you get "Extension not running" error, tell user to click the Browserwright extension icon on the tab they want to control.
+Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements.
+
+**Just use it** - Browserwright auto-launches Chrome if no extension tabs are connected. Logins persist between sessions via persistent profile.
 
 You can collaborate with the user - they can help with captchas, difficult elements, or reproducing bugs.
 
@@ -143,6 +145,95 @@ await state.newPage.goto('https://example.com');
 ```js
 await page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
 await waitForPageLoad({ page, timeout: 5000 });
+```
+
+## performance tips
+
+Optimize for speed - the difference between a 50ms and 5000ms operation is usually about waiting strategies.
+
+### waitUntil options (fastest → slowest)
+
+| Option | Speed | When to use |
+|--------|-------|-------------|
+| `commit` | ⚡ Fastest | URL change only (redirects, SPAs) |
+| `domcontentloaded` | 🚀 Fast | **Default choice** - DOM ready, scripts parsed |
+| `load` | 🐢 Slow | All resources loaded (images, fonts, CSS) |
+| `networkidle` | 🐌 Slowest | No network for 500ms - **avoid for SPAs** |
+
+```js
+// Fast navigation (recommended)
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+// For SPAs: wait for specific element, not network
+await page.goto(url, { waitUntil: 'commit' });
+await page.locator('#app-loaded').waitFor({ state: 'visible' });
+```
+
+### fill() vs type/pressSequentially
+
+**Always use `fill()`** - it's 3x faster and `type()` is deprecated.
+
+```js
+// ✅ Fast (sets value directly)
+await page.locator('#email').fill('user@example.com');
+
+// ❌ Slow (types character by character)
+await page.locator('#email').pressSequentially('user@example.com');
+```
+
+### resource blocking (for scraping)
+
+Block images, fonts, CSS for **40% speed boost** when you don't need visual rendering:
+
+```js
+await page.route('**/*', route => {
+  const type = route.request().resourceType();
+  if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
+    route.abort();
+  } else {
+    route.continue();
+  }
+});
+await page.goto(url);
+// Clean up when done
+await page.unroute('**/*');
+```
+
+### SPA and lazy-loaded content
+
+For React/Vue/Angular apps, **never use `networkidle`** - it waits forever on polling/websockets.
+
+```js
+// ❌ Bad: will timeout on SPAs
+await page.goto(spaUrl, { waitUntil: 'networkidle' });
+
+// ✅ Good: wait for specific content
+await page.goto(spaUrl, { waitUntil: 'domcontentloaded' });
+await page.locator('[data-loaded="true"]').waitFor();
+
+// For lazy-loaded content
+await page.locator('.lazy-item').first().waitFor({ state: 'visible' });
+```
+
+### timeout guidelines
+
+| Operation | Recommended timeout |
+|-----------|---------------------|
+| Element interaction | 5000ms |
+| Navigation | 30000ms |
+| Network wait | 10000ms |
+| Screenshot | 10000ms |
+
+**Never use `waitForTimeout()`** - use dynamic waits instead:
+
+```js
+// ❌ Bad: arbitrary delay
+await page.waitForTimeout(2000);
+
+// ✅ Good: wait for what you need
+await page.waitForLoadState('domcontentloaded');
+await page.locator('#result').waitFor();
+await page.waitForResponse(r => r.url().includes('/api/data'));
 ```
 
 ## common patterns
