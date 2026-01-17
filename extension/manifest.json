@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3bGRaCyyX6ft2a3K0brpGZq+4OhYURHpddXN3O+cVuaHdA76JndyjQxmqniGt7FoUl3bvzcXnq52MJ9+xD4/mD6s5yhqj8PWOB1+xWoOv3DeQsSZGYTiGOZoD93r3nebpCCBNCNFfWkmnCR5pW760kZgIfBzV3TlGyTrAKSCKjUMuvy0l7xynXw08u/PTNvpi10vnKAj+Tg4qVOFYZr+hiMux+1d66lTeTvRA85Oxv1kylnLL1/MyVLw7ScNXBMJ4DDFGN17DqlHv+NgV+StPN9aV1AvEFQBMCFvoVHvfiyw7vM+Hxfh9qY29eHAiRdcpjaRRa2eB1dDzBcp1b5wgQIDAQAB",
   "name": "Browserwright",
   "version": "0.1.0",
   "description": "Control your actual Chrome with AI - like Playwright, but for tabs you're already using. Works with Claude, Cursor, VS Code.",

@@ -7,6 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { startBrowserwrightCDPRelayServer } from './cdp-relay.js'
+import { EXTENSION_IDS } from './extension-ids.js'
 import { createFileLogger } from './create-logger.js'
 import { VERSION } from './utils.js'
 
@@ -23,11 +24,32 @@ cli
   .command('', 'Start the MCP server (default)')
   .option('--host <host>', 'Remote relay server host to connect to (or use BROWSERWRIGHT_HOST env var)')
   .option('--token <token>', 'Authentication token (or use BROWSERWRIGHT_TOKEN env var)')
-  .action(async (options: { host?: string; token?: string }) => {
+  .option('--launch', 'Launch a new browser instead of connecting to extension (like official Playwright MCP)')
+  .option('--headless', 'Run browser in headless mode (only with --launch)')
+  .option('--user-data-dir <dir>', 'Custom user data directory for persistent profile (only with --launch)')
+  .option('--isolated', 'Run in isolated mode with temporary profile (only with --launch)')
+  .option('--cdp <endpoint>', 'Connect to existing browser via CDP endpoint instead of launching')
+  .option('--channel <channel>', 'Browser channel: chrome, chrome-beta, chrome-dev, msedge (only with --launch)', { default: 'chrome' })
+  .action(async (options: {
+    host?: string
+    token?: string
+    launch?: boolean
+    headless?: boolean
+    userDataDir?: string
+    isolated?: boolean
+    cdp?: string
+    channel?: string
+  }) => {
     const { startMcp } = await import('./mcp.js')
     await startMcp({
       host: options.host,
       token: options.token,
+      launch: options.launch,
+      headless: options.headless,
+      userDataDir: options.userDataDir,
+      isolated: options.isolated,
+      cdpEndpoint: options.cdp,
+      channel: options.channel as any,
     })
   })
 
@@ -89,11 +111,7 @@ cli
     })
   })
 
-// Extension IDs for native messaging manifest
-const EXTENSION_IDS = [
-  'jfeammnjpkecdekppnclgkkffahnhfhe', // Production (Chrome Web Store)
-  'elnnakgjclnapgflmidlpobefkdmapdm', // Dev (loaded unpacked)
-]
+// Extension IDs imported from shared config (extension-ids.json)
 
 cli
   .command('install-native-host', 'Install native messaging host for seamless tab creation')

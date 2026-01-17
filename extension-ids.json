@@ -1,0 +1,7 @@
+{
+  "_comment": "Single source of truth for extension IDs. The dev ID is now PERMANENT thanks to the key in manifest.json.",
+  "production": "jfeammnjpkecdekppnclgkkffahnhfhe",
+  "development": [
+    "oebcelbomadimcgchhabclmmfnhfhenc"
+  ]
+}

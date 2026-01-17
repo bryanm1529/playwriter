@@ -9,6 +9,7 @@ import type { ExtensionMessage, ExtensionEventMessage } from './protocol.js'
 import chalk from 'chalk'
 import { EventEmitter } from 'node:events'
 import { VERSION } from './utils.js'
+import { EXTENSION_IDS, isOurExtension } from './extension-ids.js'
 import crypto from 'node:crypto'
 
 type ConnectedTarget = {
@@ -17,11 +18,8 @@ type ConnectedTarget = {
   targetInfo: Protocol.Target.TargetInfo
 }
 
-// Our extension IDs - allow attaching to our own extension pages for debugging
-const OUR_EXTENSION_IDS = [
-  'jfeammnjpkecdekppnclgkkffahnhfhe', // Production extension (Chrome Web Store)
-  'elnnakgjclnapgflmidlpobefkdmapdm', // Dev extension (loaded unpacked)
-]
+// Extension IDs imported from shared config (extension-ids.json)
+const OUR_EXTENSION_IDS = EXTENSION_IDS
 
 /**
  * Checks if a target should be filtered out (not exposed to Playwright).

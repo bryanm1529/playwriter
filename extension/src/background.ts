@@ -963,10 +963,15 @@ async function resetDebugger(): Promise<void> {
   }
 }
 
-// Our extension IDs - allow attaching to our own extension pages for debugging
+/**
+ * Extension IDs - Now STABLE thanks to "key" in manifest.json
+ *
+ * The dev ID is permanent and will never change regardless of file path.
+ * See /extension-ids.json for the source of truth.
+ */
 const OUR_EXTENSION_IDS = [
-  'jfeammnjpkecdekppnclgkkffahnhfhe', // Production extension (Chrome Web Store)
-  'elnnakgjclnapgflmidlpobefkdmapdm', // Dev extension (loaded unpacked)
+  'jfeammnjpkecdekppnclgkkffahnhfhe', // Production (Chrome Web Store)
+  'oebcelbomadimcgchhabclmmfnhfhenc', // Development (stable, from manifest key)
 ]
 
 // undefined URL is for about:blank pages (not restricted) and chrome:// URLs (restricted).
