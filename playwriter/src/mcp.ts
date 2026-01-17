@@ -1135,6 +1135,105 @@ server.tool(
   },
 )
 
+server.tool(
+  'browser_status',
+  dedent`
+    Get Playwriter browser connection status. Use this to check if the extension is connected
+    and which tabs are available for automation. Returns helpful guidance if not connected.
+  `,
+  {},
+  async () => {
+    try {
+      const remote = getRemoteConfig()
+      if (!remote) {
+        await ensureRelayServer()
+      }
+
+      const cdpEndpoint = getCdpUrl(remote || { port: RELAY_PORT })
+      const browser = await chromium.connectOverCDP(cdpEndpoint)
+
+      const allTabs: Array<{ url: string; title: string }> = []
+      try {
+        for (const ctx of browser.contexts()) {
+          for (const page of ctx.pages()) {
+            allTabs.push({
+              url: page.url(),
+              title: await page.title().catch(() => 'Unknown'),
+            })
+          }
+        }
+      } finally {
+        await browser.close()
+      }
+
+      if (allTabs.length === 0) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: dedent`
+                Extension connected but no tabs attached.
+
+                To attach a tab, the user can:
+                1. Press Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab
+                2. Click the Playwriter extension icon
+                3. Drag a tab into the 'playwriter' tab group
+              `,
+            },
+          ],
+        }
+      }
+
+      const tabList = allTabs.map((t, i) => `${i + 1}. ${t.title}\n   ${t.url}`).join('\n')
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Connected with ${allTabs.length} tab(s):\n${tabList}`,
+          },
+        ],
+      }
+    } catch (error: any) {
+      const isConnectionError =
+        error.message?.includes('ECONNREFUSED') ||
+        error.message?.includes('not running') ||
+        error.message?.includes('No browser tabs')
+
+      if (isConnectionError) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: dedent`
+                Extension not connected or no tabs attached.
+
+                To connect, the user should:
+                1. Ensure the Playwriter extension is installed
+                2. Press Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab
+                3. Or click the Playwriter extension icon on the tab they want to control
+                4. Or drag a tab into the 'playwriter' tab group
+
+                Extension: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe
+              `,
+            },
+          ],
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error checking browser status: ${error.message}`,
+          },
+        ],
+        isError: true,
+      }
+    }
+  },
+)
+
 async function checkRemoteServer({ host, port }: { host: string; port: number }): Promise<void> {
   const versionUrl = `http://${host}:${port}/version`
   try {

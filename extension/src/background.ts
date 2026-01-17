@@ -16,6 +16,13 @@ let childSessions: Map<string, number> = new Map()
 let nextSessionId = 1
 let tabGroupQueue: Promise<void> = Promise.resolve()
 
+// Queue for serializing saveAttachedTabs calls to prevent race conditions
+let saveAttachedTabsQueue: Promise<void> = Promise.resolve()
+let saveAttachedTabsPending = false
+
+// Guard for keyboard shortcut operations (per-tab)
+const tabOperationInProgress = new Set<number>()
+
 class ConnectionManager {
   ws: WebSocket | null = null
   private connectionPromise: Promise<void> | null = null
@@ -343,6 +350,58 @@ declare global {
   var toggleExtensionForActiveTab: () => Promise<{ isConnected: boolean; state: ExtensionState }>
   var getExtensionState: () => ExtensionState
   var disconnectEverything: () => Promise<void>
+}
+
+// Persistent tab memory - save attached tab URLs for reconnection suggestions
+async function saveAttachedTabs(): Promise<void> {
+  const tabs = store.getState().tabs
+  const tabUrls: string[] = []
+
+  for (const [tabId, tabInfo] of tabs) {
+    if (tabInfo.state !== 'connected') continue
+    try {
+      const tab = await chrome.tabs.get(tabId)
+      if (tab.url && !isRestrictedUrl(tab.url)) {
+        tabUrls.push(tab.url)
+      }
+    } catch {
+      // Tab may have been closed
+    }
+  }
+
+  await chrome.storage.local.set({ attachedTabUrls: tabUrls })
+}
+
+// Subscribe to tab changes to persist URLs (with coalescing to prevent race conditions)
+store.subscribe((state, prevState) => {
+  if (state.tabs !== prevState.tabs) {
+    // Coalesce rapid changes - only keep one pending save
+    if (saveAttachedTabsPending) return
+    saveAttachedTabsPending = true
+
+    saveAttachedTabsQueue = saveAttachedTabsQueue.then(async () => {
+      saveAttachedTabsPending = false
+      await saveAttachedTabs()
+    }).catch((e) => {
+      logger.debug('saveAttachedTabs error:', e)
+    })
+  }
+})
+
+// On startup, find tabs matching previously attached URLs
+async function suggestReattachment(): Promise<void> {
+  const result = await chrome.storage.local.get('attachedTabUrls')
+  const attachedTabUrls = result.attachedTabUrls as string[] | undefined
+  if (!attachedTabUrls?.length) return
+
+  const allTabs = await chrome.tabs.query({})
+  const matchingTabs = allTabs.filter(tab =>
+    tab.url && attachedTabUrls.includes(tab.url)
+  )
+
+  if (matchingTabs.length > 0) {
+    logger.debug('Found tabs matching previously attached URLs:', matchingTabs.map(t => t.url))
+  }
 }
 
 function safeSerialize(arg: any): string {
@@ -1181,6 +1240,40 @@ checkMemory()
 chrome.tabs.onRemoved.addListener(onTabRemoved)
 chrome.tabs.onActivated.addListener(onTabActivated)
 chrome.action.onClicked.addListener(onActionClicked)
+
+// Keyboard shortcut handlers for quick attach/detach
+chrome.commands.onCommand.addListener(async (command) => {
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!activeTab?.id) return
+
+  // Prevent double-triggering from rapid key presses
+  if (tabOperationInProgress.has(activeTab.id)) {
+    logger.debug('Keyboard shortcut: operation already in progress for tab', activeTab.id)
+    return
+  }
+
+  tabOperationInProgress.add(activeTab.id)
+  try {
+    switch (command) {
+      case 'attach-active-tab':
+        if (isRestrictedUrl(activeTab.url)) {
+          logger.debug('Cannot attach to restricted URL:', activeTab.url)
+          return
+        }
+        logger.debug('Keyboard shortcut: attaching tab', activeTab.id)
+        await connectTab(activeTab.id)
+        break
+
+      case 'detach-active-tab':
+        logger.debug('Keyboard shortcut: detaching tab', activeTab.id)
+        await disconnectTab(activeTab.id)
+        break
+    }
+  } finally {
+    tabOperationInProgress.delete(activeTab.id)
+  }
+})
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   void updateIcons()
   if (changeInfo.groupId !== undefined) {
@@ -1284,5 +1377,132 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 })
 
+// ============= Native Messaging =============
+
+// Native messaging port - connects to native host for MCP communication
+let nativePort: chrome.runtime.Port | null = null
+
+interface NativeMessage {
+  type: string
+  url?: string
+  tabId?: number
+  [key: string]: unknown
+}
+
+/**
+ * Connect to native messaging host for seamless tab creation
+ * Falls back to WebSocket-only mode if host not available
+ */
+function connectNativeHost(): void {
+  try {
+    nativePort = chrome.runtime.connectNative('com.playwriter.native_host')
+
+    nativePort.onMessage.addListener((message: NativeMessage) => {
+      void handleNativeMessage(message)
+    })
+
+    nativePort.onDisconnect.addListener(() => {
+      const error = chrome.runtime.lastError
+      nativePort = null
+
+      if (error?.message?.includes('not found')) {
+        // Host not installed - retry with longer interval (user might install later)
+        logger.debug('Native host not installed, will retry in 60s')
+        setTimeout(connectNativeHost, 60000)
+      } else if (error) {
+        // Other error - retry quickly
+        logger.debug('Native host error:', error.message, '- will retry in 5s')
+        setTimeout(connectNativeHost, 5000)
+      } else {
+        // Normal disconnect - retry quickly
+        logger.debug('Native host disconnected, will retry in 5s')
+        setTimeout(connectNativeHost, 5000)
+      }
+    })
+
+    logger.debug('Connected to native messaging host')
+  } catch (e: any) {
+    logger.debug('Native host connection failed:', e.message)
+  }
+}
+
+/**
+ * Handle messages from native host (forwarded from MCP)
+ */
+async function handleNativeMessage(message: NativeMessage): Promise<void> {
+  switch (message.type) {
+    case 'ready':
+      logger.debug('Native host ready, socket at:', message.socketPath)
+      break
+
+    case 'createTab': {
+      // Validate URL to prevent dangerous schemes
+      let url = message.url || 'about:blank'
+      if (url !== 'about:blank') {
+        try {
+          const parsed = new URL(url)
+          // Only allow http/https URLs
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            nativePort?.postMessage({ type: 'error', message: `Invalid URL protocol: ${parsed.protocol}` })
+            break
+          }
+        } catch {
+          nativePort?.postMessage({ type: 'error', message: 'Invalid URL format' })
+          break
+        }
+      }
+      // Create new tab and auto-attach - no user gesture needed!
+      try {
+        const tab = await chrome.tabs.create({ url })
+        if (tab.id) {
+          await connectTab(tab.id)
+          nativePort?.postMessage({ type: 'tabCreated', tabId: tab.id, url: tab.url })
+        } else {
+          nativePort?.postMessage({ type: 'error', message: 'Tab created but no ID returned' })
+        }
+      } catch (e: any) {
+        logger.debug('createTab failed:', e.message)
+        nativePort?.postMessage({ type: 'error', message: `Failed to create tab: ${e.message}` })
+      }
+      break
+    }
+
+    case 'attachTab':
+      // This still needs user gesture in MV3 - send instruction
+      nativePort?.postMessage({
+        type: 'error',
+        message: 'Use keyboard shortcut Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach existing tab'
+      })
+      break
+
+    case 'getStatus': {
+      const tabs = store.getState().tabs
+      const connectedTabs = Array.from(tabs.entries())
+        .filter(([_, t]) => t.state === 'connected')
+        .map(([id]) => id)
+
+      nativePort?.postMessage({
+        type: 'status',
+        connectedTabs,
+        wsConnected: connectionManager.ws?.readyState === WebSocket.OPEN
+      })
+      break
+    }
+
+    case 'ack':
+      // Acknowledgment from native host, ignore
+      break
+
+    default:
+      logger.debug('Unknown native message type:', message.type)
+  }
+}
+
 // Sync icons on first load
 void updateIcons()
+
+// Check for previously attached tabs on startup
+void suggestReattachment()
+
+// Connect to native host (gracefully fails if not installed)
+connectNativeHost()

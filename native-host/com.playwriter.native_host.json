@@ -1,0 +1,10 @@
+{
+  "name": "com.playwriter.native_host",
+  "description": "Playwriter Native Messaging Host - enables seamless browser automation",
+  "path": "/REPLACE/WITH/ABSOLUTE/PATH/TO/native-host/index.js",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://jfeammnjpkecdekppnclgkkffahnhfhe/",
+    "chrome-extension://elnnakgjclnapgflmidlpobefkdmapdm/"
+  ]
+}

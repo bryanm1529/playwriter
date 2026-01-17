@@ -1,9 +1,19 @@
 #!/usr/bin/env node
 
 import { cac } from 'cac'
+import { createRequire } from 'node:module'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { startPlayWriterCDPRelayServer } from './cdp-relay.js'
 import { createFileLogger } from './create-logger.js'
 import { VERSION } from './utils.js'
+
+const require = createRequire(import.meta.url)
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const RELAY_PORT = 19988
 
@@ -77,6 +87,106 @@ cli
       server.close()
       process.exit(0)
     })
+  })
+
+// Extension IDs for native messaging manifest
+const EXTENSION_IDS = [
+  'jfeammnjpkecdekppnclgkkffahnhfhe', // Production (Chrome Web Store)
+  'elnnakgjclnapgflmidlpobefkdmapdm', // Dev (loaded unpacked)
+]
+
+cli
+  .command('install-native-host', 'Install native messaging host for seamless tab creation')
+  .option('--host-path <path>', 'Path to native host script (default: bundled with playwriter)')
+  .action(async (options: { hostPath?: string }) => {
+    const platform = process.platform
+
+    // Resolve and verify host path
+    let hostPath = options.hostPath
+    if (hostPath) {
+      // User provided path - verify it exists
+      try {
+        await fs.access(hostPath)
+      } catch {
+        console.error(`Error: Native host not found at: ${hostPath}`)
+        process.exit(1)
+      }
+    } else {
+      // Try to resolve via Node module resolution first (works when npm-installed)
+      try {
+        hostPath = require.resolve('playwriter-native-host')
+      } catch {
+        // Fall back to relative paths (works in dev / monorepo)
+        const candidates = [
+          path.resolve(__dirname, '..', '..', 'native-host', 'index.js'), // Dev: from dist/
+          path.resolve(__dirname, '..', 'native-host', 'index.js'), // Alt location
+        ]
+        for (const candidate of candidates) {
+          try {
+            await fs.access(candidate)
+            hostPath = candidate
+            break
+          } catch {
+            // Try next candidate
+          }
+        }
+      }
+      if (!hostPath) {
+        console.error('Error: Native host script not found.')
+        console.error('Specify --host-path or run from the playwriter repository.')
+        process.exit(1)
+      }
+    }
+
+    // Create manifest with absolute path
+    const manifest = {
+      name: 'com.playwriter.native_host',
+      description: 'Playwriter Native Messaging Host - enables seamless browser automation',
+      path: path.resolve(hostPath),
+      type: 'stdio',
+      allowed_origins: EXTENSION_IDS.map((id) => `chrome-extension://${id}/`),
+    }
+
+    // Determine installation directory based on platform
+    let manifestDir: string
+    if (platform === 'darwin') {
+      manifestDir = path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'NativeMessagingHosts')
+    } else if (platform === 'linux') {
+      manifestDir = path.join(os.homedir(), '.config', 'google-chrome', 'NativeMessagingHosts')
+    } else if (platform === 'win32') {
+      console.error('Windows installation requires manual registry setup.')
+      console.error('See: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging#native-messaging-host-location')
+      console.error('')
+      console.error('Manifest to install:')
+      console.log(JSON.stringify(manifest, null, 2))
+      process.exit(1)
+    } else {
+      console.error(`Unsupported platform: ${platform}`)
+      process.exit(1)
+    }
+
+    try {
+      await fs.mkdir(manifestDir, { recursive: true })
+      const manifestPath = path.join(manifestDir, 'com.playwriter.native_host.json')
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+
+      console.log('✓ Native messaging host installed successfully!')
+      console.log('')
+      console.log(`  Manifest: ${manifestPath}`)
+      console.log(`  Host: ${manifest.path}`)
+      console.log('')
+      console.log('Restart Chrome to enable seamless tab creation.')
+      console.log('')
+      console.log('With native messaging installed, Playwriter can:')
+      console.log('  - Create new tabs automatically (no user gesture needed)')
+      console.log('  - Get status updates from the extension')
+      console.log('')
+      console.log('For existing tabs, use:')
+      console.log('  - Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab')
+    } catch (error: any) {
+      console.error(`Failed to install native host: ${error.message}`)
+      process.exit(1)
+    }
   })
 
 cli.help()
