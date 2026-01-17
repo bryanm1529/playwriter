@@ -28,7 +28,7 @@ This tool interacts with browser automation via Chrome DevTools Protocol (CDP). 
 
 ## Best Practices
 
-When using playwriter:
+When using Browserwright:
 
 1. Never expose CDP port (default: 9222) to untrusted networks
 2. Don't run untrusted code through the execute tool

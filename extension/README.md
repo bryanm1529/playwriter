@@ -1,62 +1,53 @@
-# Playwriter MCP
+# Browserwright
 
-Control your Chrome browser via Model Context Protocol (MCP) using Chrome DevTools Protocol (CDP) events.
+Control your actual Chrome browser with AI - like Playwright, but for tabs you're already using.
 
 [**Install from Chrome Web Store**](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe)
 
-## What is Playwriter MCP?
+## What is Browserwright?
 
-Playwriter MCP is a Chrome extension that enables Playwright to connect to your existing Chrome instance without spawning a new browser or requiring Chrome to be started in CDP mode. This allows AI assistants and automation tools to interact with your browser seamlessly through the Model Context Protocol.
+Browserwright is a Chrome extension that enables AI assistants to connect to your existing Chrome instance without spawning a new browser or requiring Chrome to be started in CDP mode. This allows AI agents (Claude, Cursor, VS Code) to interact with your actual browser session through the Model Context Protocol.
 
 ## Key Features
 
-- **No new Chrome instances**: Works with your current browser session
+- **Works with your tabs**: Control tabs you're already using, not a new browser instance
 - **No CDP mode required**: No need to restart Chrome with special flags
 - **MCP integration**: Exposes browser control through the Model Context Protocol
-- **CDP events**: Full access to Chrome DevTools Protocol capabilities
-- **Playwright compatible**: Connect Playwright directly to your running Chrome
+- **Full Playwright API**: LLMs can use their existing Playwright knowledge
+- **Accessibility snapshots**: Token-efficient structured text instead of screenshots
 
-## How it Works
+## Quick Start
 
 1. Install the extension in your Chrome browser
-2. Click the extension icon to attach the debugger to the current tab
-3. The extension creates a relay connection using CDP
-4. Connect your MCP client (like Playwright) to control the browser
-5. The icon changes color to indicate connection status:
-   - Gray: Not connected
-   - Green: Successfully connected
+2. Press **Ctrl+Shift+P** (Cmd+Shift+P on Mac) to attach the current tab
+3. Or click the extension icon, or drag a tab into the "browserwright" tab group
+4. The icon turns green when successfully connected
+5. Your AI assistant can now control the browser!
 
 ## Use Cases
 
 - Browser automation without disrupting your workflow
 - AI-assisted web browsing and testing
 - Debugging and development with MCP-enabled tools
-- Remote browser control for various applications
+- Controlling tabs that require your login session
 
 ## Permissions
 
-This extension requires the following permissions:
+This extension requires:
 
 - **debugger**: To access Chrome DevTools Protocol
-- **activeTab**: To interact with the current tab
+- **tabGroups**: To organize connected tabs
 - **tabs**: To manage browser tabs
 - **all_urls**: To work with any website
-
-## Getting Started
-
-1. [Install the extension from the Chrome Web Store](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe)
-2. Navigate to any webpage
-3. Click the Playwriter MCP extension icon
-4. The debugger will attach and the icon will turn green when connected
-5. Connect your MCP client to start controlling the browser
+- **nativeMessaging**: For seamless communication with AI tools
 
 ## Privacy & Security
 
-Playwriter MCP runs locally in your browser and does not send any data to external servers. All browser control happens through the standard Chrome DevTools Protocol on your machine.
+Browserwright runs locally in your browser and does not send any data to external servers. All browser control happens through the standard Chrome DevTools Protocol on your machine.
 
 ## Support
 
-For issues, feature requests, or contributions, visit the [GitHub repository](https://github.com/remorses/playwriter).
+For issues, feature requests, or contributions, visit the [GitHub repository](https://github.com/sicmundus/browserwright).
 
 ## License
 

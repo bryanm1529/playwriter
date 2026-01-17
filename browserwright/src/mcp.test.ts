@@ -7,13 +7,13 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { getCdpUrl } from './utils.js'
-import type { ExtensionState } from 'mcp-extension/src/types.js'
+import type { ExtensionState } from 'browserwright-extension/src/types.js'
 import type { Protocol } from 'devtools-protocol'
 import { imageSize } from 'image-size'
 import { getCDPSessionForPage } from './cdp-session.js'
 import { Debugger } from './debugger.js'
 import { Editor } from './editor.js'
-import { startPlayWriterCDPRelayServer, type RelayServer } from './cdp-relay.js'
+import { startBrowserwrightCDPRelayServer, type RelayServer } from './cdp-relay.js'
 import { createFileLogger } from './create-logger.js'
 import type { CDPCommand } from './cdp-types.js'
 import { killPortProcess } from 'kill-port-process'
@@ -72,12 +72,12 @@ async function setupTestContext({ tempDirPrefix }: { tempDirPrefix: string }): P
     await killProcessOnPort(TEST_PORT)
 
     console.log('Building extension...')
-    await execAsync(`TESTING=1 PLAYWRITER_PORT=${TEST_PORT} pnpm build`, { cwd: '../extension' })
+    await execAsync(`TESTING=1 BROWSERWRIGHT_PORT=${TEST_PORT} pnpm build`, { cwd: '../extension' })
     console.log('Extension built')
 
     const localLogPath = path.join(process.cwd(), 'relay-server.log')
     const logger = createFileLogger({ logFilePath: localLogPath })
-    const relayServer = await startPlayWriterCDPRelayServer({ port: TEST_PORT, logger })
+    const relayServer = await startBrowserwrightCDPRelayServer({ port: TEST_PORT, logger })
 
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), tempDirPrefix))
     const extensionPath = path.resolve('../extension/dist')
@@ -1560,7 +1560,7 @@ describe('MCP Server Tests', () => {
           ]
         `)
 
-        const screenshotPath = path.join(os.tmpdir(), 'playwriter-test-screenshot.png')
+        const screenshotPath = path.join(os.tmpdir(), 'browserwright-test-screenshot.png')
         fs.writeFileSync(screenshotPath, viewportScreenshot)
         console.log('Screenshot saved to:', screenshotPath)
 
@@ -2296,7 +2296,7 @@ describe('MCP Server Tests', () => {
 
                 // Verify labels removed
                 const labelsAfterHide = await cdpPage.evaluate(() =>
-                    document.getElementById('__playwriter_labels__')
+                    document.getElementById('__browserwright_labels__')
                 )
                 expect(labelsAfterHide).toBeNull()
 
@@ -2546,7 +2546,7 @@ describe('MCP Server Tests', () => {
         expect(versionRes.status).toBe(200)
         const versionJson = await versionRes.json() as { webSocketDebuggerUrl: string }
         expect(versionJson).toMatchObject({
-            'Browser': expect.stringContaining('Playwriter/'),
+            'Browser': expect.stringContaining('Browserwright/'),
             'Protocol-Version': '1.3',
             'webSocketDebuggerUrl': expect.stringContaining('ws://'),
         })
@@ -3596,7 +3596,7 @@ describe('Auto-enable Tests', () => {
     let testCtx: TestContext | null = null
 
     // Set env var before any setup runs
-    process.env.PLAYWRITER_AUTO_ENABLE = '1'
+    process.env.BROWSERWRIGHT_AUTO_ENABLE = '1'
 
     beforeAll(async () => {
         testCtx = await setupTestContext({ tempDirPrefix: 'pw-auto-test-' })
@@ -3610,7 +3610,7 @@ describe('Auto-enable Tests', () => {
     }, 600000)
 
     afterAll(async () => {
-        delete process.env.PLAYWRITER_AUTO_ENABLE
+        delete process.env.BROWSERWRIGHT_AUTO_ENABLE
         await cleanupTestContext(testCtx)
         testCtx = null
     })

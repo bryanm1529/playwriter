@@ -2,8 +2,8 @@
  * Generates markdown resource files for the MCP at build time.
  * 
  * These files are written to:
- * - playwriter/dist/ - for the MCP to read at runtime
- * - website/public/ - for hosting on playwriter.dev
+ * - browserwright/dist/ - for the MCP to read at runtime
+ * - website/public/ - for hosting on browserwright (local)
  */
 
 import fs from 'node:fs'
@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url'
 import dedent from 'string-dedent'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const playwriterDir = path.join(__dirname, '..')
-const distDir = path.join(playwriterDir, 'dist')
-const websitePublicDir = path.join(playwriterDir, '..', 'website', 'public', 'resources')
+const browserwrightDir = path.join(__dirname, '..')
+const distDir = path.join(browserwrightDir, 'dist')
+const websitePublicDir = path.join(browserwrightDir, '..', 'website', 'public', 'resources')
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {
@@ -23,7 +23,7 @@ function ensureDir(dir: string) {
 }
 
 function readFile(relativePath: string): string {
-  return fs.readFileSync(path.join(playwriterDir, relativePath), 'utf-8')
+  return fs.readFileSync(path.join(browserwrightDir, relativePath), 'utf-8')
 }
 
 function writeToDestinations(filename: string, content: string) {

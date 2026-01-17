@@ -1,13 +1,11 @@
 {
-    "name": "root",
+    "name": "browserwright",
     "private": true,
     "scripts": {
-        "test": "pnpm --filter playwriter test",
+        "test": "pnpm --filter browserwright test",
         "watch": "pnpm -r watch",
-
-        "reload": "pnpm --filter mcp-extension reload",
-        "agents.md": "agentsdotmd ./PLAYWRITER_AGENTS.md core.md typescript.md pnpm.md vitest.md changelog.md docs-writing.md github.md playwright.md zod.md gitchamber.md",
-        "release": "pnpm --filter playwriter build && rm -f extension.zip && cd extension && zip -r ../extension.zip dist && cd .. && realpath extension.zip | pbcopy && open 'https://chrome.google.com/webstore/devconsole/a379d569-9533-44e4-9749-0368f6dbf878/jfeammnjpkecdekppnclgkkffahnhfhe/edit/package'"
+        "reload": "pnpm --filter browserwright-extension reload",
+        "release": "pnpm --filter browserwright build && rm -f extension.zip && cd extension && zip -r ../extension.zip dist && cd .. && realpath extension.zip | pbcopy && open 'https://chrome.google.com/webstore/devconsole/a379d569-9533-44e4-9749-0368f6dbf878/jfeammnjpkecdekppnclgkkffahnhfhe/edit/package'"
     },
     "devDependencies": {
         "@changesets/cli": "^2.29.7",
@@ -17,10 +15,10 @@
         "vite": "^7.2.2",
         "vitest": "^4.0.8"
     },
-    "repository": "https://github.com/remorses/",
-    "author": "remorses <beats.by.morse@gmail.com>",
-    "license": "",
+    "repository": "https://github.com/sicmundus/browserwright",
+    "author": "Browserwright",
+    "license": "Apache-2.0",
     "dependencies": {
-        "mcp-extension": "workspace:*"
+        "browserwright-extension": "workspace:*"
     }
 }

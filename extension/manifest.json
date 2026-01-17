@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Playwriter MCP",
-  "version": "0.0.67",
-  "description": "Automate your Browser using Cursor, Claude, VS Code. More capable and context efficient than Playwright MCP.",
+  "name": "Browserwright",
+  "version": "0.1.0",
+  "description": "Control your actual Chrome with AI - like Playwright, but for tabs you're already using. Works with Claude, Cursor, VS Code.",
   "permissions": ["debugger", "tabGroups", "contextMenus", "tabs", "nativeMessaging", "storage"],
   "host_permissions": ["<all_urls>"],
   "commands": {
@@ -11,14 +11,14 @@
         "default": "Ctrl+Shift+P",
         "mac": "Command+Shift+P"
       },
-      "description": "Attach Playwriter to active tab"
+      "description": "Attach Browserwright to active tab"
     },
     "detach-active-tab": {
       "suggested_key": {
         "default": "Ctrl+Shift+D",
         "mac": "Command+Shift+D"
       },
-      "description": "Detach Playwriter from active tab"
+      "description": "Detach Browserwright from active tab"
     }
   },
   "background": {

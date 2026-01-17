@@ -1,6 +1,6 @@
-# playwriter execute
+# browserwright execute
 
-Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements. If you get "Extension not running" error, tell user to click the playwriter extension icon on the tab they want to control.
+Control user's Chrome browser via playwright code snippets. Prefer single-line code with semicolons between statements. If you get "Extension not running" error, tell user to click the Browserwright extension icon on the tab they want to control.
 
 You can collaborate with the user - they can help with captchas, difficult elements, or reproducing bugs.
 
@@ -19,7 +19,7 @@ You can collaborate with the user - they can help with captchas, difficult eleme
 - **No bringToFront**: never call unless user asks - it's disruptive and unnecessary, you can interact with background pages
 - **Check state after actions**: always verify page state after clicking/submitting (see next section)
 - **Clean up listeners**: call `page.removeAllListeners()` at end of message to prevent leaks
-- **CDP sessions**: use `getCDPSession({ page })` not `page.context().newCDPSession()` - the latter doesn't work through playwriter relay
+- **CDP sessions**: use `getCDPSession({ page })` not `page.context().newCDPSession()` - the latter doesn't work through Browserwright relay
 - **Wait for load**: use `page.waitForLoadState('domcontentloaded')` not `page.waitForEvent('load')` - waitForEvent times out if already loaded
 - **Avoid timeouts**: prefer proper waits over `page.waitForTimeout()` - there are better ways to wait for elements
 
@@ -239,14 +239,14 @@ const source = await getReactSource({ locator: page.locator('aria-ref=e5') });
 // => { fileName, lineNumber, columnNumber, componentName }
 ```
 
-**getStylesForLocator** - inspect CSS styles applied to an element, like browser DevTools "Styles" panel. Useful for debugging styling issues, finding where a CSS property is defined (file:line), and checking inherited styles. Returns selector, source location, and declarations for each matching rule. ALWAYS read `https://playwriter.dev/resources/styles-api.md` first.
+**getStylesForLocator** - inspect CSS styles applied to an element, like browser DevTools "Styles" panel. Useful for debugging styling issues, finding where a CSS property is defined (file:line), and checking inherited styles. Returns selector, source location, and declarations for each matching rule. ALWAYS read `https://browserwright.dev/resources/styles-api.md` first.
 
 ```js
 const styles = await getStylesForLocator({ locator: page.locator('.btn'), cdp: await getCDPSession({ page }) });
 console.log(formatStylesAsText(styles));
 ```
 
-**createDebugger** - set breakpoints, step through code, inspect variables at runtime. Useful for debugging issues that only reproduce in browser, understanding code flow, and inspecting state at specific points. Can pause on exceptions, evaluate expressions in scope, and blackbox framework code. ALWAYS read `https://playwriter.dev/resources/debugger-api.md` first.
+**createDebugger** - set breakpoints, step through code, inspect variables at runtime. Useful for debugging issues that only reproduce in browser, understanding code flow, and inspecting state at specific points. Can pause on exceptions, evaluate expressions in scope, and blackbox framework code. ALWAYS read `https://browserwright.dev/resources/debugger-api.md` first.
 
 ```js
 const cdp = await getCDPSession({ page }); const dbg = createDebugger({ cdp }); await dbg.enable();
@@ -255,7 +255,7 @@ await dbg.setBreakpoint({ file: scripts[0].url, line: 42 });
 // when paused: dbg.inspectLocalVariables(), dbg.stepOver(), dbg.resume()
 ```
 
-**createEditor** - view and live-edit page scripts and CSS at runtime. Edits are in-memory (persist until reload). Useful for testing quick fixes, searching page scripts with grep, and toggling debug flags. ALWAYS read `https://playwriter.dev/resources/editor-api.md` first.
+**createEditor** - view and live-edit page scripts and CSS at runtime. Edits are in-memory (persist until reload). Useful for testing quick fixes, searching page scripts with grep, and toggling debug flags. ALWAYS read `https://browserwright.dev/resources/editor-api.md` first.
 
 ```js
 const cdp = await getCDPSession({ page }); const editor = createEditor({ cdp }); await editor.enable();
@@ -284,10 +284,10 @@ Labels are color-coded: yellow=links, orange=buttons, coral=inputs, pink=checkbo
 
 ## pinned elements
 
-Users can right-click → "Copy Playwriter Element Reference" to store elements in `globalThis.playwriterPinnedElem1` (increments for each pin). The reference is copied to clipboard:
+Users can right-click → "Copy Browserwright Element Reference" to store elements in `globalThis.browserwrightPinnedElem1` (increments for each pin). The reference is copied to clipboard:
 
 ```js
-const el = await page.evaluateHandle(() => globalThis.playwriterPinnedElem1);
+const el = await page.evaluateHandle(() => globalThis.browserwrightPinnedElem1);
 await el.click();
 ```
 
@@ -350,7 +350,7 @@ Clean up listeners when done: `page.removeAllListeners('request'); page.removeAl
 
 ## capabilities
 
-Examples of what playwriter can do:
+Examples of what Browserwright can do:
 - Monitor console logs while user reproduces a bug
 - Intercept network requests to reverse-engineer APIs and build SDKs
 - Scrape data by replaying paginated API calls instead of scrolling DOM
@@ -360,6 +360,6 @@ Examples of what playwriter can do:
 - Handle popups, downloads, iframes, and dialog boxes
 
 
-## debugging playwriter issues
+## debugging browserwright issues
 
-if some internal critical error happens you can read your own relay ws logs to understand the issue, it will show logs from extension, mcp and ws server together. then you can create a gh issue using `gh issue create -R remorses/playwriter --title title --body body`. ask for user confirmation before doing this.
+if some internal critical error happens you can read your own relay ws logs to understand the issue, it will show logs from extension, mcp and ws server together. then you can create a gh issue using `gh issue create -R sicmundus/browserwright --title title --body body`. ask for user confirmation before doing this.

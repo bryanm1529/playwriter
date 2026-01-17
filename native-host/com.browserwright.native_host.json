@@ -1,6 +1,6 @@
 {
-  "name": "com.playwriter.native_host",
-  "description": "Playwriter Native Messaging Host - enables seamless browser automation",
+  "name": "com.browserwright.native_host",
+  "description": "Browserwright Native Messaging Host - control your actual Chrome with AI",
   "path": "/REPLACE/WITH/ABSOLUTE/PATH/TO/native-host/index.js",
   "type": "stdio",
   "allowed_origins": [

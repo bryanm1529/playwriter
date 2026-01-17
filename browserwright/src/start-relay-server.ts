@@ -1,7 +1,7 @@
-import { startPlayWriterCDPRelayServer } from './cdp-relay.js'
+import { startBrowserwrightCDPRelayServer } from './cdp-relay.js'
 import { createFileLogger } from './create-logger.js'
 
-process.title = 'playwriter-ws-server'
+process.title = 'browserwright-ws-server'
 
 const logger = createFileLogger()
 
@@ -21,7 +21,7 @@ process.on('exit', async (code) => {
 
 
 export async function startServer({ port = 19988, host = '127.0.0.1', token }: { port?: number; host?: string; token?: string } = {}) {
-  const server = await startPlayWriterCDPRelayServer({ port, host, token, logger })
+  const server = await startBrowserwrightCDPRelayServer({ port, host, token, logger })
 
   console.log('CDP Relay Server running. Press Ctrl+C to stop.')
   console.log('Logs are being written to:', logger.logFilePath)

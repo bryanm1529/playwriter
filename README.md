@@ -3,7 +3,7 @@
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="banner-dark.png" />
         <source media="(prefers-color-scheme: light)" srcset="banner.png" />
-    <img src="banner.png" alt="Playwriter - For browser automation MCP" width="400" height="278" />
+    <img src="banner.png" alt="Browserwright - For browser automation MCP" width="400" height="278" />
     </picture>
     <br/>
     <br/>
@@ -20,11 +20,11 @@
 
 1. **Install the Chrome Extension**
 
-   [**Install Extension**](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe) - Install the [Playwriter MCP Extension](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe) from the Chrome Web Store (or load it unpacked during development). Pin the extension to your Chrome toolbar for easy access.
+   [**Install Extension**](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe) - Install the [Browserwright MCP Extension](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe) from the Chrome Web Store (or load it unpacked during development). Pin the extension to your Chrome toolbar for easy access.
 
 2. **Connect to a Tab**
 
-   Click the Playwriter MCP extension icon on any tab you want to control. The icon will turn green when successfully connected.
+   Click the Browserwright MCP extension icon on any tab you want to control. The icon will turn green when successfully connected.
 
    **Icon states:**
    - **Gray:** Not connected
@@ -39,9 +39,9 @@
    ```json
    {
      "mcpServers": {
-       "playwriter": {
+       "browserwright": {
          "command": "npx",
-         "args": ["playwriter@latest"]
+         "args": ["browserwright@latest"]
        }
      }
    }
@@ -55,7 +55,7 @@
 
 **Important:** Before using the MCP, you must [install](https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe) and enable the extension on at least one tab:
 
-1. Pin the Playwriter extension to your Chrome toolbar (click the puzzle icon)
+1. Pin the Browserwright extension to your Chrome toolbar (click the puzzle icon)
 2. Navigate to a tab you want to control
 3. Click the extension icon - it will turn green when connected
 
@@ -70,13 +70,13 @@ The MCP will automatically start a relay server and connect to your enabled brow
 
 ### Using with Playwright
 
-You can use playwriter programmatically with playwright-core:
+You can use browserwright programmatically with playwright-core:
 
 ```typescript
 import { chromium } from 'playwright-core'
-import { startPlayWriterCDPRelayServer, getCdpUrl } from 'playwriter'
+import { startBrowserwrightCDPRelayServer, getCdpUrl } from 'browserwright'
 
-const server = await startPlayWriterCDPRelayServer()
+const server = await startBrowserwrightCDPRelayServer()
 
 const browser = await chromium.connectOverCDP(getCdpUrl())
 
@@ -95,15 +95,15 @@ server.close()
 Start the relay server, then connect with just the HTTP URL:
 
 ```bash
-npx -y playwriter serve --host 127.0.0.1
+npx -y browserwright serve --host 127.0.0.1
 ```
 
 Or programmatically:
 
 ```typescript
-import { startPlayWriterCDPRelayServer } from 'playwriter'
+import { startBrowserwrightCDPRelayServer } from 'browserwright'
 
-await startPlayWriterCDPRelayServer()
+await startBrowserwrightCDPRelayServer()
 const browser = await chromium.connectOverCDP('http://127.0.0.1:19988')
 ```
 
@@ -111,7 +111,7 @@ This works with any CDP-compatible tool - no special configuration needed.
 
 ### Visual Aria Ref Labels
 
-Playwriter includes Vimium-style visual labels that overlay interactive elements, making it easy for AI agents to identify and click elements from screenshots. The `screenshotWithAccessibilityLabels` function is available in the MCP context.
+Browserwright includes Vimium-style visual labels that overlay interactive elements, making it easy for AI agents to identify and click elements from screenshots. The `screenshotWithAccessibilityLabels` function is available in the MCP context.
 
 ```javascript
 // Take a screenshot with labels overlaid on interactive elements
@@ -153,18 +153,18 @@ The function automatically shows labels, takes a screenshot, hides labels, and i
 
 ### Environment Variables
 
-#### `PLAYWRITER_AUTO_ENABLE`
+#### `BROWSERWRIGHT_AUTO_ENABLE`
 
 When set, the MCP will automatically create an initial tab when a Playwright client connects and no tabs are currently enabled. This is useful for fully automated workflows where you don't want to manually click the extension icon.
 
 ```json
 {
   "mcpServers": {
-    "playwriter": {
+    "browserwright": {
       "command": "npx",
-      "args": ["playwriter@latest"],
+      "args": ["browserwright@latest"],
       "env": {
-        "PLAYWRITER_AUTO_ENABLE": "1"
+        "BROWSERWRIGHT_AUTO_ENABLE": "1"
       }
     }
   }
@@ -179,7 +179,7 @@ With this setting, when your AI agent starts, it will immediately have a page to
 
 ### vs Playwright MCP
 
-Playwriter uses a Chrome extension instead of launching a full new Chrome window. This approach has several benefits:
+Browserwright uses a Chrome extension instead of launching a full new Chrome window. This approach has several benefits:
 
 - **Collaborate with your agent** - Work alongside the AI in the same browser, helping it when stuck on captchas or complex interactions
 - **Start on existing pages** - Launch the MCP on a page in your existing browser to replicate bugs exactly as they occur
@@ -190,9 +190,9 @@ Playwriter uses a Chrome extension instead of launching a full new Chrome window
 
 ### vs BrowserMCP
 
-Playwriter has access to the full playwright API available, it can send any CDP command via the playwright methods. It only uses 1 tool `execute` to send playwright code snippets. This means that the LLM can reuse its knowledge about playwright and less context window is used to expose browser automations tools.
+Browserwright has access to the full playwright API available, it can send any CDP command via the playwright methods. It only uses 1 tool `execute` to send playwright code snippets. This means that the LLM can reuse its knowledge about playwright and less context window is used to expose browser automations tools.
 
-Playwriter is also more capable because it exposes the full playwright API instead of only a few tools.
+Browserwright is also more capable because it exposes the full playwright API instead of only a few tools.
 
 For comparison here are the tools supported by BrowserMCP:
 
@@ -222,7 +222,7 @@ Antigravity's browser integration suffers from the same fundamental problem as B
 
 Jetski exposes 17+ browser tools (`capture_browser_screenshot`, `browser_click_element`, `browser_input`, `browser_scroll`, `wait_5_seconds`, etc.). Each tool definition consumes context window space with parameter schemas, descriptions, and examples. This bloated schema forces Antigravity to spawn a **subagent every time you want to use the browser**, adding significant latency and indirection to every browser interaction.
 
-**Playwriter's Approach:**
+**Browserwright's Approach:**
 
 - **1 tool instead of 17+** - Only the `execute` tool is needed
 - **No subagent spawning** - Browser operations happen directly without extra layers
@@ -238,22 +238,22 @@ Claude Code has a built-in Chrome extension ("Claude in Chrome") that uses Nativ
 
 **Works Everywhere Claude's Extension Doesn't:**
 
-- **Windows WSL support** - Claude's extension doesn't work in WSL because Native Messaging requires Windows-native Chrome. Playwriter uses WebSocket on localhost:19988, so agents running in WSL can control Chrome on your Windows host
+- **Windows WSL support** - Claude's extension doesn't work in WSL because Native Messaging requires Windows-native Chrome. Browserwright uses WebSocket on localhost:19988, so agents running in WSL can control Chrome on your Windows host
 - **Any MCP-compatible agent** - Not locked to Claude. Works with GPT, Gemini, local models, or any CLI tool that supports MCP
 - **Devcontainers & VMs** - Run your agent in an isolated environment while controlling Chrome on your host machine
 
 **Context Efficiency:**
 
-Claude's extension sends screenshots to the LLM for visual understanding, then uses DOM inspection for interactions. Playwriter uses accessibility snapshots instead - structured text describing interactive elements with their roles, names, and states:
+Claude's extension sends screenshots to the LLM for visual understanding, then uses DOM inspection for interactions. Browserwright uses accessibility snapshots instead - structured text describing interactive elements with their roles, names, and states:
 
 | Approach           | What's sent to LLM      | Typical size         |
 | ------------------ | ----------------------- | -------------------- |
 | Claude's extension | Screenshots             | 100KB-1MB+ per image |
-| Playwriter         | Accessibility snapshots | 5-20KB text          |
+| Browserwright         | Accessibility snapshots | 5-20KB text          |
 
 **Full Playwright API vs Step-by-Step Navigation:**
 
-Claude's extension navigates pages step-by-step with screenshots. Playwriter exposes the complete Playwright API through a single `execute` tool - LLMs already know Playwright from training data:
+Claude's extension navigates pages step-by-step with screenshots. Browserwright exposes the complete Playwright API through a single `execute` tool - LLMs already know Playwright from training data:
 
 ```js
 // Complex interactions in one call
@@ -264,7 +264,7 @@ await download.saveAs('/tmp/report.pdf')
 
 **Advanced DevTools Features:**
 
-Playwriter provides capabilities Claude's extension doesn't have:
+Browserwright provides capabilities Claude's extension doesn't have:
 
 ```js
 // Set breakpoints and inspect variables at runtime
@@ -291,14 +291,14 @@ const source = await getReactSource({ locator: page.locator('aria-ref=e5') })
 
 **User Collaboration Features:**
 
-- **Right-click → "Copy Playwriter Element Reference"** - Pin any element and reference it as `globalThis.playwriterPinnedElem1` in your automation code
+- **Right-click → "Copy Browserwright Element Reference"** - Pin any element and reference it as `globalThis.browserwrightPinnedElem1` in your automation code
 - **Vimium-style visual labels** - `screenshotWithAccessibilityLabels()` captures screenshots with clickable labels on all interactive elements
-- **Tab group organization** - Connected tabs are grouped together with a green "playwriter" label
+- **Tab group organization** - Connected tabs are grouped together with a green "browserwright" label
 - **Bypass automation detection** - Disconnect the extension temporarily to pass bot detection (e.g., Google login), then reconnect
 
 **Summary:**
 
-| Feature                 | Claude's Extension | Playwriter                   |
+| Feature                 | Claude's Extension | Browserwright                   |
 | ----------------------- | ------------------ | ---------------------------- |
 | Windows WSL             | No                 | Yes                          |
 | Works with any agent    | No (Claude only)   | Yes (any MCP client)         |
@@ -346,9 +346,9 @@ Run agents in isolated environments (devcontainers, VMs, SSH) while controlling 
 **On host (where Chrome runs):**
 
 ```bash
-npx -y playwriter serve --token <secret>
+npx -y browserwright serve --token <secret>
 # or use environment variable:
-PLAYWRITER_TOKEN=<secret> npx -y playwriter serve
+BROWSERWRIGHT_TOKEN=<secret> npx -y browserwright serve
 ```
 
 **In container/VM (where agent runs):**
@@ -358,9 +358,9 @@ Configure your MCP client with the host and token. You can pass them as CLI argu
 ```json
 {
   "mcpServers": {
-    "playwriter": {
+    "browserwright": {
       "command": "npx",
-      "args": ["playwriter@latest", "--host", "host.docker.internal", "--token", "<secret>"]
+      "args": ["browserwright@latest", "--host", "host.docker.internal", "--token", "<secret>"]
     }
   }
 }
@@ -371,12 +371,12 @@ Or use environment variables (useful if you want to set them globally in your pr
 ```json
 {
   "mcpServers": {
-    "playwriter": {
+    "browserwright": {
       "command": "npx",
-      "args": ["playwriter@latest"],
+      "args": ["browserwright@latest"],
       "env": {
-        "PLAYWRITER_HOST": "host.docker.internal",
-        "PLAYWRITER_TOKEN": "<secret>"
+        "BROWSERWRIGHT_HOST": "host.docker.internal",
+        "BROWSERWRIGHT_TOKEN": "<secret>"
       }
     }
   }
@@ -392,7 +392,7 @@ Use `host.docker.internal` for devcontainers, or your host's IP for VMs/SSH.
 
 ## Security
 
-Playwriter is designed with security in mind, ensuring that only you can control your browser.
+Browserwright is designed with security in mind, ensuring that only you can control your browser.
 
 ### How It Works
 

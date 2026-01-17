@@ -1,6 +1,6 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
-import { startPlayWriterCDPRelayServer } from '../src/cdp-relay.js'
+import { startBrowserwrightCDPRelayServer } from '../src/cdp-relay.js'
 import { WebSocket } from 'ws'
 import { killPortProcess } from 'kill-port-process'
 import { createFileLogger } from '../src/create-logger.js'
@@ -30,7 +30,7 @@ describe('Security Tests', () => {
         const token = 'secret-token'
         const logger = createFileLogger()
         
-        server = await startPlayWriterCDPRelayServer({
+        server = await startBrowserwrightCDPRelayServer({
             port: TEST_PORT,
             token,
             logger
@@ -70,7 +70,7 @@ describe('Security Tests', () => {
 
     it('should enforce localhost restrictions for /extension endpoint', async () => {
         const logger = createFileLogger()
-        server = await startPlayWriterCDPRelayServer({
+        server = await startBrowserwrightCDPRelayServer({
             port: TEST_PORT,
             logger
         })

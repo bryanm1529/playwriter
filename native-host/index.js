@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Playwriter Native Messaging Host
+ * Browserwright Native Messaging Host
  *
- * Bridges communication between the Playwriter extension and MCP/CLI.
+ * Bridges communication between the Browserwright extension and MCP/CLI.
  * Chrome starts this process when the extension calls chrome.runtime.connectNative().
  *
  * Protocol:
@@ -18,7 +18,7 @@ const os = require('os')
 const fs = require('fs')
 
 // Socket path for MCP communication
-const SOCKET_PATH = `/tmp/playwriter-native-host-${os.userInfo().username}`
+const SOCKET_PATH = `/tmp/browserwright-native-host-${os.userInfo().username}`
 
 // Clean up stale socket file
 if (fs.existsSync(SOCKET_PATH)) {

@@ -9,6 +9,7 @@ import type { ExtensionMessage, ExtensionEventMessage } from './protocol.js'
 import chalk from 'chalk'
 import { EventEmitter } from 'node:events'
 import { VERSION } from './utils.js'
+import crypto from 'node:crypto'
 
 type ConnectedTarget = {
   sessionId: string
@@ -68,7 +69,7 @@ export type RelayServer = {
   off<K extends keyof RelayServerEvents>(event: K, listener: RelayServerEvents[K]): void
 }
 
-export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.0.0.1', token, logger }: { port?: number; host?: string; token?: string; logger?: { log(...args: any[]): void; error(...args: any[]): void } } = {}): Promise<RelayServer> {
+export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '127.0.0.1', token, logger }: { port?: number; host?: string; token?: string; logger?: { log(...args: any[]): void; error(...args: any[]): void } } = {}): Promise<RelayServer> {
   const emitter = new EventEmitter()
   const connectedTargets = new Map<string, ConnectedTarget>()
 
@@ -232,10 +233,10 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
     })
   }
 
-  // Auto-create initial tab when PLAYWRITER_AUTO_ENABLE is set and no targets exist.
+  // Auto-create initial tab when BROWSERWRIGHT_AUTO_ENABLE is set and no targets exist.
   // This allows Playwright to connect and immediately have a page to work with.
   async function maybeAutoCreateInitialTab(): Promise<void> {
-    if (!process.env.PLAYWRITER_AUTO_ENABLE) {
+    if (!process.env.BROWSERWRIGHT_AUTO_ENABLE) {
       return
     }
     if (!extensionWs) {
@@ -427,14 +428,14 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
   app
     .on(['GET', 'PUT'], '/json/version', (c) => {
       return c.json({
-        'Browser': `Playwriter/${VERSION}`,
+        'Browser': `Browserwright/${VERSION}`,
         'Protocol-Version': '1.3',
         'webSocketDebuggerUrl': getCdpWsUrl(c)
       })
     })
     .on(['GET', 'PUT'], '/json/version/', (c) => {
       return c.json({
-        'Browser': `Playwriter/${VERSION}`,
+        'Browser': `Browserwright/${VERSION}`,
         'Protocol-Version': '1.3',
         'webSocketDebuggerUrl': getCdpWsUrl(c)
       })
@@ -531,8 +532,11 @@ export async function startPlayWriterCDPRelayServer({ port = 19988, host = '127.
 
     if (token) {
       const url = new URL(c.req.url, 'http://localhost')
-      const providedToken = url.searchParams.get('token')
-      if (providedToken !== token) {
+      const providedToken = url.searchParams.get('token') || ''
+      // Use constant-time comparison to prevent timing attacks
+      const tokenBuffer = Buffer.from(token)
+      const providedBuffer = Buffer.from(providedToken)
+      if (tokenBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(tokenBuffer, providedBuffer)) {
         return c.text('Unauthorized', 401)
       }
     }

@@ -2,10 +2,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 
 // Function to get the browser executable path
-// Can be overridden by environment variable PLAYWRITER_BROWSER_PATH
+// Can be overridden by environment variable BROWSERWRIGHT_BROWSER_PATH
 export function getBrowserExecutablePath(): string {
   // Check environment variable first
-  const envPath = process.env.PLAYWRITER_BROWSER_PATH
+  const envPath = process.env.BROWSERWRIGHT_BROWSER_PATH
   if (envPath && fs.existsSync(envPath)) {
     return envPath
   }
@@ -59,6 +59,6 @@ function findChromeExecutablePath(): string {
   }
 
   throw new Error(
-    'Could not find Chrome executable. Please install Google Chrome or set PLAYWRITER_BROWSER_PATH environment variable.',
+    'Could not find Chrome executable. Please install Google Chrome or set BROWSERWRIGHT_BROWSER_PATH environment variable.',
   )
 }

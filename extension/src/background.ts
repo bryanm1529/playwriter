@@ -1,11 +1,11 @@
-declare const process: { env: { PLAYWRITER_PORT: string } }
+declare const process: { env: { BROWSERWRIGHT_PORT: string } }
 
 import { createStore } from 'zustand/vanilla'
 import type { ExtensionState, ConnectionState, TabState, TabInfo } from './types'
-import type { CDPEvent, Protocol } from 'playwriter/src/cdp-types'
-import type { ExtensionCommandMessage, ExtensionResponseMessage } from 'playwriter/src/protocol'
+import type { CDPEvent, Protocol } from 'browserwright/src/cdp-types'
+import type { ExtensionCommandMessage, ExtensionResponseMessage } from 'browserwright/src/protocol'
 
-const RELAY_PORT = process.env.PLAYWRITER_PORT
+const RELAY_PORT = process.env.BROWSERWRIGHT_PORT
 const RELAY_URL = `ws://127.0.0.1:${RELAY_PORT}/extension`
 
 function sleep(ms: number): Promise<void> {
@@ -500,9 +500,9 @@ async function syncTabGroup(): Promise<void> {
       .map(([tabId]) => tabId)
 
     // Always query by title - no cached ID that can go stale
-    const existingGroups = await chrome.tabGroups.query({ title: 'playwriter' })
+    const existingGroups = await chrome.tabGroups.query({ title: 'browserwright' })
 
-    // If no connected tabs, clear any existing playwriter groups
+    // If no connected tabs, clear any existing browserwright groups
     if (connectedTabIds.length === 0) {
       for (const group of existingGroups) {
         const tabsInGroup = await chrome.tabs.query({ groupId: group.id })
@@ -510,7 +510,7 @@ async function syncTabGroup(): Promise<void> {
         if (tabIdsToUngroup.length > 0) {
           await chrome.tabs.ungroup(tabIdsToUngroup)
         }
-        logger.debug('Cleared playwriter group:', group.id)
+        logger.debug('Cleared browserwright group:', group.id)
       }
       return
     }
@@ -526,7 +526,7 @@ async function syncTabGroup(): Promise<void> {
         if (tabIdsToUngroup.length > 0) {
           await chrome.tabs.ungroup(tabIdsToUngroup)
         }
-        logger.debug('Removed duplicate playwriter group:', group.id)
+        logger.debug('Removed duplicate browserwright group:', group.id)
       }
     }
 
@@ -549,7 +549,7 @@ async function syncTabGroup(): Promise<void> {
     if (tabsToAdd.length > 0) {
       if (groupId === undefined) {
         const newGroupId = await chrome.tabs.group({ tabIds: tabsToAdd })
-        await chrome.tabGroups.update(newGroupId, { title: 'playwriter', color: 'green' })
+        await chrome.tabGroups.update(newGroupId, { title: 'browserwright', color: 'green' })
         logger.debug('Created tab group:', newGroupId, 'with tabs:', tabsToAdd)
       } else {
         await chrome.tabs.group({ tabIds: tabsToAdd, groupId })
@@ -764,7 +764,7 @@ async function attachTab(tabId: number, { skipAttachedEvent = false }: { skipAtt
 
     const contextMenuScript = `
       document.addEventListener('contextmenu', (e) => {
-        window.__playwriter_lastRightClicked = e.target;
+        window.__browserwright_lastRightClicked = e.target;
       }, true);
     `
     await chrome.debugger.sendCommand(debuggee, 'Page.addScriptToEvaluateOnNewDocument', { source: contextMenuScript })
@@ -1150,10 +1150,10 @@ async function onActionClicked(tab: chrome.tabs.Tab): Promise<void> {
 resetDebugger()
 connectionManager.maintainLoop()
 
-chrome.contextMenus.remove('playwriter-pin-element').catch(() => {}).finally(() => {
+chrome.contextMenus.remove('browserwright-pin-element').catch(() => {}).finally(() => {
   chrome.contextMenus.create({
-    id: 'playwriter-pin-element',
-    title: 'Copy Playwriter Element Reference',
+    id: 'browserwright-pin-element',
+    title: 'Copy Browserwright Element Reference',
     contexts: ['all'],
     visible: false,
   })
@@ -1162,7 +1162,7 @@ chrome.contextMenus.remove('playwriter-pin-element').catch(() => {}).finally(() 
 function updateContextMenuVisibility(): void {
   const { currentTabId, tabs } = store.getState()
   const isConnected = currentTabId !== undefined && tabs.get(currentTabId)?.state === 'connected'
-  chrome.contextMenus.update('playwriter-pin-element', { visible: isConnected })
+  chrome.contextMenus.update('browserwright-pin-element', { visible: isConnected })
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -1279,8 +1279,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.groupId !== undefined) {
     // Queue tab group operations to serialize with syncTabGroup and disconnectEverything
     tabGroupQueue = tabGroupQueue.then(async () => {
-      // Query for playwriter group by title - no stale cached ID
-      const existingGroups = await chrome.tabGroups.query({ title: 'playwriter' })
+      // Query for browserwright group by title - no stale cached ID
+      const existingGroups = await chrome.tabGroups.query({ title: 'browserwright' })
       const groupId = existingGroups[0]?.id
       if (groupId === undefined) {
         return
@@ -1288,7 +1288,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       const { tabs } = store.getState()
       if (changeInfo.groupId === groupId) {
         if (!tabs.has(tabId) && !isRestrictedUrl(tab.url)) {
-          logger.debug('Tab manually added to playwriter group:', tabId)
+          logger.debug('Tab manually added to browserwright group:', tabId)
           await connectTab(tabId)
         }
       } else if (tabs.has(tabId)) {
@@ -1297,7 +1297,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           logger.debug('Tab removed from group while connecting, ignoring:', tabId)
           return
         }
-        logger.debug('Tab manually removed from playwriter group:', tabId)
+        logger.debug('Tab manually removed from browserwright group:', tabId)
         await disconnectTab(tabId)
       }
     }).catch((e) => {
@@ -1307,7 +1307,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 })
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== 'playwriter-pin-element' || !tab?.id) return
+  if (info.menuItemId !== 'browserwright-pin-element' || !tab?.id) return
 
   const tabInfo = store.getState().tabs.get(tab.id)
   if (!tabInfo || tabInfo.state !== 'connected') {
@@ -1327,7 +1327,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     return { tabs: newTabs }
   })
 
-  const name = `playwriterPinnedElem${count}`
+  const name = `browserwrightPinnedElem${count}`
 
   const connectedTabs = Array.from(store.getState().tabs.entries())
     .filter(([_, t]) => t.state === 'connected')
@@ -1338,8 +1338,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     const result = (await chrome.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
       expression: `
-        if (window.__playwriter_lastRightClicked) {
-          window.${name} = window.__playwriter_lastRightClicked;
+        if (window.__browserwright_lastRightClicked) {
+          window.${name} = window.__browserwright_lastRightClicked;
           '${name}';
         } else {
           throw new Error('No element was right-clicked');
@@ -1395,7 +1395,7 @@ interface NativeMessage {
  */
 function connectNativeHost(): void {
   try {
-    nativePort = chrome.runtime.connectNative('com.playwriter.native_host')
+    nativePort = chrome.runtime.connectNative('com.browserwright.native_host')
 
     nativePort.onMessage.addListener((message: NativeMessage) => {
       void handleNativeMessage(message)

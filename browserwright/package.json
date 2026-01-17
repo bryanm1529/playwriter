@@ -1,11 +1,11 @@
 {
-  "name": "playwriter",
-  "description": "",
-  "version": "0.0.47",
+  "name": "browserwright",
+  "description": "Control your actual Chrome browser with AI - like Playwright, but for tabs you're already using",
+  "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "repository": "https://github.com/remorses/playwriter",
+  "repository": "https://github.com/sicmundus/browserwright",
   "scripts": {
     "build": "rm -rf dist *.tsbuildinfo && mkdir dist && bun scripts/build-selector-generator.ts && bun scripts/build-bippy.ts && tsc && bun scripts/build-resources.ts",
     "prepublishOnly": "pnpm build",
@@ -23,7 +23,7 @@
     "bin.js"
   ],
   "keywords": [],
-  "author": "Tommaso De Rossi, morse <beats.by.morse@gmail.com>",
+  "author": "Browserwright",
   "license": "",
   "devDependencies": {
     "@browserbasehq/stagehand": "^3.0.5",
@@ -34,7 +34,7 @@
     "@vitest/ui": "^4.0.8",
     "bippy": "^0.5.27",
     "image-size": "^2.0.2",
-    "mcp-extension": "workspace:*",
+    "browserwright-extension": "workspace:*",
     "vite-node": "^5.0.0",
     "vitest": "^4.0.8"
   },

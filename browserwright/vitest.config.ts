@@ -9,7 +9,7 @@ export default defineConfig({
     exclude: ['dist', 'dist/**/*', 'node_modules/**'],
 
     env: {
-      PLAYWRITER_NODE_ENV: 'development',
+      BROWSERWRIGHT_NODE_ENV: 'development',
     },
   },
 })

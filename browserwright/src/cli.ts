@@ -6,7 +6,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { startPlayWriterCDPRelayServer } from './cdp-relay.js'
+import { startBrowserwrightCDPRelayServer } from './cdp-relay.js'
 import { createFileLogger } from './create-logger.js'
 import { VERSION } from './utils.js'
 
@@ -17,12 +17,12 @@ const __dirname = path.dirname(__filename)
 
 const RELAY_PORT = 19988
 
-const cli = cac('playwriter')
+const cli = cac('browserwright')
 
 cli
   .command('', 'Start the MCP server (default)')
-  .option('--host <host>', 'Remote relay server host to connect to (or use PLAYWRITER_HOST env var)')
-  .option('--token <token>', 'Authentication token (or use PLAYWRITER_TOKEN env var)')
+  .option('--host <host>', 'Remote relay server host to connect to (or use BROWSERWRIGHT_HOST env var)')
+  .option('--token <token>', 'Authentication token (or use BROWSERWRIGHT_TOKEN env var)')
   .action(async (options: { host?: string; token?: string }) => {
     const { startMcp } = await import('./mcp.js')
     await startMcp({
@@ -34,18 +34,18 @@ cli
 cli
   .command('serve', 'Start the CDP relay server for remote MCP connections')
   .option('--host <host>', 'Host to bind to', { default: '0.0.0.0' })
-  .option('--token <token>', 'Authentication token (or use PLAYWRITER_TOKEN env var)')
+  .option('--token <token>', 'Authentication token (or use BROWSERWRIGHT_TOKEN env var)')
   .action(async (options: { host: string; token?: string }) => {
-    const token = options.token || process.env.PLAYWRITER_TOKEN
+    const token = options.token || process.env.BROWSERWRIGHT_TOKEN
     if (!token) {
       console.error('Error: Authentication token is required.')
-      console.error('Provide --token <token> or set PLAYWRITER_TOKEN environment variable.')
+      console.error('Provide --token <token> or set BROWSERWRIGHT_TOKEN environment variable.')
       process.exit(1)
     }
 
     const logger = createFileLogger()
 
-    process.title = 'playwriter-serve'
+    process.title = 'browserwright-serve'
 
     process.on('uncaughtException', async (err) => {
       await logger.error('Uncaught Exception:', err)
@@ -57,14 +57,14 @@ cli
       process.exit(1)
     })
 
-    const server = await startPlayWriterCDPRelayServer({
+    const server = await startBrowserwrightCDPRelayServer({
       port: RELAY_PORT,
       host: options.host,
       token,
       logger,
     })
 
-    console.log('Playwriter CDP relay server started')
+    console.log('Browserwright CDP relay server started')
     console.log(`  Host: ${options.host}`)
     console.log(`  Port: ${RELAY_PORT}`)
     console.log(`  Token: (configured)`)
@@ -97,7 +97,7 @@ const EXTENSION_IDS = [
 
 cli
   .command('install-native-host', 'Install native messaging host for seamless tab creation')
-  .option('--host-path <path>', 'Path to native host script (default: bundled with playwriter)')
+  .option('--host-path <path>', 'Path to native host script (default: bundled with browserwright)')
   .action(async (options: { hostPath?: string }) => {
     const platform = process.platform
 
@@ -114,7 +114,7 @@ cli
     } else {
       // Try to resolve via Node module resolution first (works when npm-installed)
       try {
-        hostPath = require.resolve('playwriter-native-host')
+        hostPath = require.resolve('browserwright-native-host')
       } catch {
         // Fall back to relative paths (works in dev / monorepo)
         const candidates = [
@@ -133,15 +133,15 @@ cli
       }
       if (!hostPath) {
         console.error('Error: Native host script not found.')
-        console.error('Specify --host-path or run from the playwriter repository.')
+        console.error('Specify --host-path or run from the browserwright repository.')
         process.exit(1)
       }
     }
 
     // Create manifest with absolute path
     const manifest = {
-      name: 'com.playwriter.native_host',
-      description: 'Playwriter Native Messaging Host - enables seamless browser automation',
+      name: 'com.browserwright.native_host',
+      description: 'Browserwright Native Messaging Host - enables seamless browser automation',
       path: path.resolve(hostPath),
       type: 'stdio',
       allowed_origins: EXTENSION_IDS.map((id) => `chrome-extension://${id}/`),
@@ -167,7 +167,7 @@ cli
 
     try {
       await fs.mkdir(manifestDir, { recursive: true })
-      const manifestPath = path.join(manifestDir, 'com.playwriter.native_host.json')
+      const manifestPath = path.join(manifestDir, 'com.browserwright.native_host.json')
       await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
 
       console.log('✓ Native messaging host installed successfully!')
@@ -177,7 +177,7 @@ cli
       console.log('')
       console.log('Restart Chrome to enable seamless tab creation.')
       console.log('')
-      console.log('With native messaging installed, Playwriter can:')
+      console.log('With native messaging installed, Browserwright can:')
       console.log('  - Create new tabs automatically (no user gesture needed)')
       console.log('  - Get status updates from the extension')
       console.log('')

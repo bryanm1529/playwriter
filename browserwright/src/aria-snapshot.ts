@@ -26,7 +26,7 @@ export interface AriaSnapshotResult {
   getRefStringForLocator: (locator: Locator | ElementHandle) => Promise<string | null>
 }
 
-const LABELS_CONTAINER_ID = '__playwriter_labels__'
+const LABELS_CONTAINER_ID = '__browserwright_labels__'
 
 // Roles that represent interactive elements (clickable, typeable) and media elements
 const INTERACTIVE_ROLES = new Set([
@@ -279,7 +279,7 @@ export async function showAriaRefLabels({ page, interactiveOnly = true }: {
       const win = globalThis as any
 
       // Cancel any pending auto-hide timer from previous call
-      const timerKey = '__playwriter_labels_timer__'
+      const timerKey = '__browserwright_labels_timer__'
       if (win[timerKey]) {
         win.clearTimeout(win[timerKey])
         win[timerKey] = null
@@ -534,7 +534,7 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
     const win = globalThis as any
 
     // Cancel any pending auto-hide timer
-    const timerKey = '__playwriter_labels_timer__'
+    const timerKey = '__browserwright_labels_timer__'
     if (win[timerKey]) {
       win.clearTimeout(win[timerKey])
       win[timerKey] = null
@@ -570,7 +570,7 @@ export async function screenshotWithAccessibilityLabels({ page, interactiveOnly 
   // Generate unique filename with timestamp
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 6)
-  const filename = `playwriter-screenshot-${timestamp}-${random}.jpg`
+  const filename = `browserwright-screenshot-${timestamp}-${random}.jpg`
 
   // Use ./tmp folder (gitignored) instead of system temp
   const tmpDir = path.join(process.cwd(), 'tmp')

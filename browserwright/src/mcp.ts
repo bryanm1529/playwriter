@@ -125,8 +125,8 @@ const lastSnapshots: WeakMap<Page, string> = new WeakMap()
 // Cache CDP sessions per page
 const cdpSessionCache: WeakMap<Page, CDPSession> = new WeakMap()
 
-const RELAY_PORT = Number(process.env.PLAYWRITER_PORT) || 19988
-const NO_TABS_ERROR = `No browser tabs are connected. Please install and enable the Playwriter extension on at least one tab: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe`
+const RELAY_PORT = Number(process.env.BROWSERWRIGHT_PORT) || 19988
+const NO_TABS_ERROR = `No browser tabs are connected. Please install and enable the Browserwright extension on at least one tab: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe`
 
 // Create a scoped fs instance that allows access to cwd, /tmp, and os.tmpdir()
 const scopedFs = new ScopedFS()
@@ -231,14 +231,14 @@ interface RemoteConfig {
 }
 
 function getRemoteConfig(): RemoteConfig | null {
-  const host = process.env.PLAYWRITER_HOST
+  const host = process.env.BROWSERWRIGHT_HOST
   if (!host) {
     return null
   }
   return {
     host,
     port: RELAY_PORT,
-    token: process.env.PLAYWRITER_TOKEN,
+    token: process.env.BROWSERWRIGHT_TOKEN,
   }
 }
 
@@ -373,7 +373,7 @@ async function ensureRelayServer(): Promise<void> {
     mcpLog('CDP relay server not running, starting it...')
   }
 
-  const dev = process.env.PLAYWRITER_NODE_ENV === 'development'
+  const dev = process.env.BROWSERWRIGHT_NODE_ENV === 'development'
   const scriptPath = dev
     ? path.resolve(__dirname, '../src/start-relay-server.ts')
     : require.resolve('../dist/start-relay-server.js')
@@ -588,28 +588,28 @@ async function resetConnection(): Promise<{ browser: Browser; page: Page; contex
 }
 
 const server = new McpServer({
-  name: 'playwriter',
+  name: 'browserwright',
   title: 'The better playwright MCP: works as a browser extension. No context bloat. More capable.',
   version: '1.0.0',
 })
 
 const promptContent =
   fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'prompt.md'), 'utf-8') +
-  `\n\nfor debugging internal playwriter errors, check playwriter relay server logs at: ${LOG_FILE_PATH}`
+  `\n\nfor debugging internal browserwright errors, check browserwright relay server logs at: ${LOG_FILE_PATH}`
 
 server.resource(
   'debugger-api',
-  'https://playwriter.dev/resources/debugger-api.md',
+  'browserwright://resources/debugger-api.md',
   { mimeType: 'text/plain' },
   async () => {
-    const packageJsonPath = require.resolve('playwriter/package.json')
+    const packageJsonPath = require.resolve('browserwright/package.json')
     const packageDir = path.dirname(packageJsonPath)
     const content = fs.readFileSync(path.join(packageDir, 'dist', 'debugger-api.md'), 'utf-8')
 
     return {
       contents: [
         {
-          uri: 'https://playwriter.dev/resources/debugger-api.md',
+          uri: 'browserwright://resources/debugger-api.md',
           text: content,
           mimeType: 'text/plain',
         },
@@ -620,17 +620,17 @@ server.resource(
 
 server.resource(
   'editor-api',
-  'https://playwriter.dev/resources/editor-api.md',
+  'browserwright://resources/editor-api.md',
   { mimeType: 'text/plain' },
   async () => {
-    const packageJsonPath = require.resolve('playwriter/package.json')
+    const packageJsonPath = require.resolve('browserwright/package.json')
     const packageDir = path.dirname(packageJsonPath)
     const content = fs.readFileSync(path.join(packageDir, 'dist', 'editor-api.md'), 'utf-8')
 
     return {
       contents: [
         {
-          uri: 'https://playwriter.dev/resources/editor-api.md',
+          uri: 'browserwright://resources/editor-api.md',
           text: content,
           mimeType: 'text/plain',
         },
@@ -641,17 +641,17 @@ server.resource(
 
 server.resource(
   'styles-api',
-  'https://playwriter.dev/resources/styles-api.md',
+  'browserwright://resources/styles-api.md',
   { mimeType: 'text/plain' },
   async () => {
-    const packageJsonPath = require.resolve('playwriter/package.json')
+    const packageJsonPath = require.resolve('browserwright/package.json')
     const packageDir = path.dirname(packageJsonPath)
     const content = fs.readFileSync(path.join(packageDir, 'dist', 'styles-api.md'), 'utf-8')
 
     return {
       contents: [
         {
-          uri: 'https://playwriter.dev/resources/styles-api.md',
+          uri: 'browserwright://resources/styles-api.md',
           text: content,
           mimeType: 'text/plain',
         },
@@ -1138,7 +1138,7 @@ server.tool(
 server.tool(
   'browser_status',
   dedent`
-    Get Playwriter browser connection status. Use this to check if the extension is connected
+    Get Browserwright browser connection status. Use this to check if the extension is connected
     and which tabs are available for automation. Returns helpful guidance if not connected.
   `,
   {},
@@ -1176,8 +1176,8 @@ server.tool(
 
                 To attach a tab, the user can:
                 1. Press Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab
-                2. Click the Playwriter extension icon
-                3. Drag a tab into the 'playwriter' tab group
+                2. Click the Browserwright extension icon
+                3. Drag a tab into the 'browserwright' tab group
               `,
             },
           ],
@@ -1209,10 +1209,10 @@ server.tool(
                 Extension not connected or no tabs attached.
 
                 To connect, the user should:
-                1. Ensure the Playwriter extension is installed
+                1. Ensure the Browserwright extension is installed
                 2. Press Ctrl+Shift+P (Cmd+Shift+P on Mac) to attach current tab
-                3. Or click the Playwriter extension icon on the tab they want to control
-                4. Or drag a tab into the 'playwriter' tab group
+                3. Or click the Browserwright extension icon on the tab they want to control
+                4. Or drag a tab into the 'browserwright' tab group
 
                 Extension: https://chromewebstore.google.com/detail/playwriter-mcp/jfeammnjpkecdekppnclgkkffahnhfhe
               `,
@@ -1246,7 +1246,7 @@ async function checkRemoteServer({ host, port }: { host: string; port: number })
     if (isConnectionError) {
       throw new Error(
         `Cannot connect to remote relay server at ${host}:${port}. ` +
-          `Make sure 'npx -y playwriter serve' is running on the host machine.`,
+          `Make sure 'npx -y browserwright serve' is running on the host machine.`,
       )
     }
     throw new Error(`Failed to connect to remote relay server: ${error.message}`)
@@ -1255,10 +1255,10 @@ async function checkRemoteServer({ host, port }: { host: string; port: number })
 
 export async function startMcp(options: { host?: string; token?: string } = {}) {
   if (options.host) {
-    process.env.PLAYWRITER_HOST = options.host
+    process.env.BROWSERWRIGHT_HOST = options.host
   }
   if (options.token) {
-    process.env.PLAYWRITER_TOKEN = options.token
+    process.env.BROWSERWRIGHT_TOKEN = options.token
   }
 
   const remote = getRemoteConfig()

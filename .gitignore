@@ -9,8 +9,8 @@ coverage
 *.zip
 *.log
 tmp
-playwriter/src/assets/*.png
-playwriter/src/assets/framer.html
+browserwright/src/assets/*.png
+browserwright/src/assets/framer.html
 *-snapshot.txt
 claude-extension
 

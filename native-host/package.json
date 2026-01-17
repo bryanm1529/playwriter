@@ -1,14 +1,14 @@
 {
-  "name": "playwriter-native-host",
-  "version": "1.0.0",
-  "description": "Native messaging host for Playwriter Chrome extension",
+  "name": "browserwright-native-host",
+  "version": "0.1.0",
+  "description": "Native messaging host for Browserwright Chrome extension",
   "main": "index.js",
   "bin": "index.js",
   "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": ["playwriter", "chrome", "native-messaging"],
-  "author": "Playwriter",
+  "keywords": ["browserwright", "chrome", "native-messaging", "browser-automation"],
+  "author": "Browserwright",
   "license": "MIT"
 }

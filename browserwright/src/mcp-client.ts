@@ -18,12 +18,12 @@ export async function createTransport({ args = [], port }: { args?: string[]; po
 }> {
   const env: Record<string, string> = {
     ...process.env as Record<string, string>,
-    DEBUG: 'playwriter:mcp:test',
+    DEBUG: 'browserwright:mcp:test',
     DEBUG_COLORS: '0',
     DEBUG_HIDE_DATE: '1',
   }
   if (port) {
-    env.PLAYWRITER_PORT = String(port)
+    env.BROWSERWRIGHT_PORT = String(port)
   }
   const transport = new StdioClientTransport({
     command: 'pnpm',

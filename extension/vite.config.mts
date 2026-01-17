@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const defineEnv: Record<string, string> = {
-  'process.env.PLAYWRITER_PORT': JSON.stringify(process.env.PLAYWRITER_PORT || '19988'),
+  'process.env.BROWSERWRIGHT_PORT': JSON.stringify(process.env.BROWSERWRIGHT_PORT || '19988'),
 };
 if (process.env.TESTING) {
   defineEnv['import.meta.env.TESTING'] = 'true';
