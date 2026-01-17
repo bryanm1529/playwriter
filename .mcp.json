@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "browserwright": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/sicmundus/browserwright/browserwright/bin.js"],
+      "env": {
+        "BROWSERWRIGHT_PORT": "19988"
+      }
+    }
+  }
+}

@@ -1,468 +1,364 @@
-# Editor API - Browserwright
+# Editor API Reference
 
-> View and live-edit JavaScript and CSS in your actual Chrome browser at runtime.
+The Editor class provides a Claude Code-like interface for viewing and editing web page scripts at runtime.
 
-## Quick Start
+## Types
 
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
-
-// Find a script
-const scripts = await editor.list({ pattern: /app/ });
-console.log(scripts);
-
-// Read it
-const { content } = await editor.read({ url: scripts[0] });
-console.log(content);
-
-// Edit it (changes apply immediately)
-await editor.edit({
-  url: scripts[0],
-  oldString: 'const DEBUG = false',
-  newString: 'const DEBUG = true'
-});
-```
-
-## When to Use This
-
-- Toggle debug flags without rebuilding
-- Test a quick fix before committing
-- Find where a function or variable is defined
-- Remove console.log statements temporarily
-- Live-edit CSS to test styling changes
-- Search across all page scripts for patterns
-
-## Core Concepts
-
-**In-Memory Edits**: Changes modify the running V8 instance. They persist until page reload but are never saved to disk or server. This is safe for experimentation.
-
-**Scripts & Stylesheets**: The editor tracks both JavaScript files and CSS stylesheets. Use `list()` to see all available resources.
-
-**Inline Scripts**: Scripts without a URL (inline `<script>` tags) get synthetic URLs like `inline://123`. You can read and edit them the same way.
-
-**Exact String Matching**: The `edit()` method requires your `oldString` to match exactly once. This prevents accidental edits to the wrong location.
-
----
-
-## API Reference
-
-### Setup
-
-#### `createEditor({ cdp })`
-
-Create an editor instance from a CDP session.
-
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
-```
-
-#### `enable()`
-
-Initialize the editor. Must be called before other methods. Scripts and stylesheets are discovered as they load.
-
-**Tip**: Reload the page after enabling to capture all resources:
-
-```js
-await editor.enable();
-await page.reload();
-```
-
----
-
-### Discovering Resources
-
-#### `list({ pattern? })`
-
-Get all available script and stylesheet URLs.
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `pattern` | `RegExp?` | Filter URLs by regex |
-
-```js
-// All resources
-const all = await editor.list();
-
-// Just JavaScript
-const jsFiles = await editor.list({ pattern: /\.js/ });
-
-// Just CSS
-const cssFiles = await editor.list({ pattern: /\.css/ });
-
-// Find specific files
-const appScripts = await editor.list({ pattern: /app|main|index/ });
-```
-
----
-
-### Reading Code
-
-#### `read({ url, offset?, limit? })`
-
-Read a script or stylesheet with line numbers.
-
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `url` | `string` | - | URL from `list()` or `grep()` |
-| `offset` | `number` | `0` | Start line (0-based) |
-| `limit` | `number` | `2000` | Max lines to return |
-
-Returns:
 ```ts
-{
-  content: string;    // Line-numbered content
-  totalLines: number; // Total lines in file
-  startLine: number;  // First line returned (1-based)
-  endLine: number;    // Last line returned
+import type { ICDPSession } from './cdp-session.js';
+export interface ReadResult {
+    content: string;
+    totalLines: number;
+    startLine: number;
+    endLine: number;
+}
+export interface SearchMatch {
+    url: string;
+    lineNumber: number;
+    lineContent: string;
+}
+export interface EditResult {
+    success: boolean;
+    stackChanged?: boolean;
+}
+/**
+ * A class for viewing and editing web page scripts via Chrome DevTools Protocol.
+ * Provides a Claude Code-like interface: list, read, edit, grep.
+ *
+ * Edits are in-memory only and persist until page reload. They modify the running
+ * V8 instance but are not saved to disk or server.
+ *
+ * @example
+ * ```ts
+ * const cdp = await getCDPSession({ page })
+ * const editor = new Editor({ cdp })
+ * await editor.enable()
+ *
+ * // List available scripts
+ * const scripts = editor.list({ search: 'app' })
+ *
+ * // Read a script
+ * const { content } = await editor.read({ url: 'https://example.com/app.js' })
+ *
+ * // Edit a script
+ * await editor.edit({
+ *   url: 'https://example.com/app.js',
+ *   oldString: 'console.log("old")',
+ *   newString: 'console.log("new")'
+ * })
+ * ```
+ */
+export declare class Editor {
+    private cdp;
+    private enabled;
+    private scripts;
+    private stylesheets;
+    private sourceCache;
+    constructor({ cdp }: {
+        cdp: ICDPSession;
+    });
+    private setupEventListeners;
+    /**
+     * Enables the editor. Must be called before other methods.
+     * Scripts are collected from Debugger.scriptParsed events.
+     * Reload the page after enabling to capture all scripts.
+     */
+    enable(): Promise<void>;
+    private getIdByUrl;
+    /**
+     * Lists available script and stylesheet URLs. Use pattern to filter by regex.
+     * Automatically enables the editor if not already enabled.
+     *
+     * @param options - Options
+     * @param options.pattern - Optional regex to filter URLs
+     * @returns Array of URLs
+     *
+     * @example
+     * ```ts
+     * // List all scripts and stylesheets
+     * const urls = await editor.list()
+     *
+     * // List only JS files
+     * const jsFiles = await editor.list({ pattern: /\.js/ })
+     *
+     * // List only CSS files
+     * const cssFiles = await editor.list({ pattern: /\.css/ })
+     *
+     * // Search for specific scripts
+     * const appScripts = await editor.list({ pattern: /app/ })
+     * ```
+     */
+    list({ pattern }?: {
+        pattern?: RegExp;
+    }): Promise<string[]>;
+    /**
+     * Reads a script or stylesheet's source code by URL.
+     * Returns line-numbered content like Claude Code's Read tool.
+     * For inline scripts, use the `inline://` URL from list() or grep().
+     *
+     * @param options - Options
+     * @param options.url - Script or stylesheet URL (inline scripts have `inline://{id}` URLs)
+     * @param options.offset - Line number to start from (0-based, default 0)
+     * @param options.limit - Number of lines to return (default 2000)
+     * @returns Content with line numbers, total lines, and range info
+     *
+     * @example
+     * ```ts
+     * // Read by URL
+     * const { content, totalLines } = await editor.read({
+     *   url: 'https://example.com/app.js'
+     * })
+     *
+     * // Read a CSS file
+     * const { content } = await editor.read({ url: 'https://example.com/styles.css' })
+     *
+     * // Read lines 100-200
+     * const { content } = await editor.read({
+     *   url: 'https://example.com/app.js',
+     *   offset: 100,
+     *   limit: 100
+     * })
+     * ```
+     */
+    read({ url, offset, limit }: {
+        url: string;
+        offset?: number;
+        limit?: number;
+    }): Promise<ReadResult>;
+    private getSource;
+    /**
+     * Edits a script or stylesheet by replacing oldString with newString.
+     * Like Claude Code's Edit tool - performs exact string replacement.
+     *
+     * @param options - Options
+     * @param options.url - Script or stylesheet URL (inline scripts have `inline://{id}` URLs)
+     * @param options.oldString - Exact string to find and replace
+     * @param options.newString - Replacement string
+     * @param options.dryRun - If true, validate without applying (default false)
+     * @returns Result with success status
+     *
+     * @example
+     * ```ts
+     * // Replace a string in JS
+     * await editor.edit({
+     *   url: 'https://example.com/app.js',
+     *   oldString: 'const DEBUG = false',
+     *   newString: 'const DEBUG = true'
+     * })
+     *
+     * // Edit CSS
+     * await editor.edit({
+     *   url: 'https://example.com/styles.css',
+     *   oldString: 'color: red',
+     *   newString: 'color: blue'
+     * })
+     * ```
+     */
+    edit({ url, oldString, newString, dryRun, }: {
+        url: string;
+        oldString: string;
+        newString: string;
+        dryRun?: boolean;
+    }): Promise<EditResult>;
+    private setSource;
+    /**
+     * Searches for a regex across all scripts and stylesheets.
+     * Like Claude Code's Grep tool - returns matching lines with context.
+     *
+     * @param options - Options
+     * @param options.regex - Regular expression to search for in file contents
+     * @param options.pattern - Optional regex to filter which URLs to search
+     * @returns Array of matches with url, line number, and line content
+     *
+     * @example
+     * ```ts
+     * // Search all scripts and stylesheets for "color"
+     * const matches = await editor.grep({ regex: /color/ })
+     *
+     * // Search only CSS files
+     * const matches = await editor.grep({
+     *   regex: /background-color/,
+     *   pattern: /\.css/
+     * })
+     *
+     * // Regex search for console methods in JS
+     * const matches = await editor.grep({
+     *   regex: /console\.(log|error|warn)/,
+     *   pattern: /\.js/
+     * })
+     * ```
+     */
+    grep({ regex, pattern }: {
+        regex: RegExp;
+        pattern?: RegExp;
+    }): Promise<SearchMatch[]>;
+    /**
+     * Writes entire content to a script or stylesheet, replacing all existing code.
+     * Use with caution - prefer edit() for targeted changes.
+     *
+     * @param options - Options
+     * @param options.url - Script or stylesheet URL (inline scripts have `inline://{id}` URLs)
+     * @param options.content - New content
+     * @param options.dryRun - If true, validate without applying (default false, only works for JS)
+     */
+    write({ url, content, dryRun }: {
+        url: string;
+        content: string;
+        dryRun?: boolean;
+    }): Promise<EditResult>;
 }
 ```
 
-```js
-// Read entire file
-const { content, totalLines } = await editor.read({
-  url: 'https://example.com/app.js'
-});
-console.log(`${totalLines} lines total`);
-console.log(content);
-// "    1| import React from 'react';
-//     2| import { useState } from 'react';
-//     3| ..."
+## Examples
 
-// Read lines 100-200
-const { content: partial } = await editor.read({
-  url: 'https://example.com/app.js',
-  offset: 99,  // 0-based, so 99 = line 100
-  limit: 100
-});
-```
-
----
-
-### Editing Code
-
-#### `edit({ url, oldString, newString, dryRun? })`
-
-Replace a string in a script or stylesheet. Changes apply immediately.
-
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `url` | `string` | - | URL to edit |
-| `oldString` | `string` | - | Exact string to find (must match once) |
-| `newString` | `string` | - | Replacement string |
-| `dryRun` | `boolean` | `false` | Validate without applying |
-
-Returns:
 ```ts
-{
-  success: boolean;
-  stackChanged?: boolean; // For JS: did the call stack change?
-}
-```
+import { page, getCDPSession, createEditor, console } from './debugger-examples-types.js'
 
-```js
-// Toggle a debug flag
-await editor.edit({
-  url: 'https://example.com/app.js',
-  oldString: 'const DEBUG = false',
-  newString: 'const DEBUG = true'
-});
+// Example: List available scripts
+async function listScripts() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
 
-// Edit CSS
-await editor.edit({
-  url: 'https://example.com/styles.css',
-  oldString: 'background-color: red',
-  newString: 'background-color: blue'
-});
-
-// Validate first
-const result = await editor.edit({
-  url: 'https://example.com/app.js',
-  oldString: 'function broken(',
-  newString: 'function fixed(',
-  dryRun: true
-});
-if (result.success) {
-  // Now do it for real
-  await editor.edit({ /* same params without dryRun */ });
-}
-```
-
-**Throws**:
-- `"oldString not found"` - The string doesn't exist in the file
-- `"oldString found N times"` - Ambiguous match; add more context to make it unique
-
----
-
-#### `write({ url, content, dryRun? })`
-
-Replace entire file contents. Use with caution - prefer `edit()` for targeted changes.
-
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `url` | `string` | - | URL to write |
-| `content` | `string` | - | New complete content |
-| `dryRun` | `boolean` | `false` | Validate without applying (JS only) |
-
-```js
-// Read, transform, write
-const { content } = await editor.read({ url: 'https://example.com/app.js' });
-const newContent = content
-  .split('\n')
-  .map(line => line.replace(/^\s*\d+\| /, '')) // Remove line numbers
-  .join('\n')
-  .replace(/console\.log/g, 'console.debug');
-
-await editor.write({
-  url: 'https://example.com/app.js',
-  content: newContent
-});
-```
-
----
-
-### Searching Code
-
-#### `grep({ regex, pattern? })`
-
-Search for a pattern across all scripts and stylesheets.
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `regex` | `RegExp` | Pattern to search for in content |
-| `pattern` | `RegExp?` | Filter which URLs to search |
-
-Returns:
-```ts
-Array<{
-  url: string;        // File URL
-  lineNumber: number; // Line number (1-based)
-  lineContent: string; // Matching line (trimmed, max 200 chars)
-}>
-```
-
-```js
-// Find all console.log calls
-const logs = await editor.grep({ regex: /console\.log/ });
-for (const match of logs) {
-  console.log(`${match.url}:${match.lineNumber}`);
-  console.log(`  ${match.lineContent}`);
+  const scripts = editor.list({ pattern: /app/ })
+  console.log(scripts)
 }
 
-// Search only JavaScript files
-const todos = await editor.grep({
-  regex: /TODO|FIXME|HACK/i,
-  pattern: /\.js/
-});
+// Example: Read a script with line numbers
+async function readScript() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
 
-// Search only CSS
-const colorRules = await editor.grep({
-  regex: /color:\s*#[0-9a-f]{6}/i,
-  pattern: /\.css/
-});
+  const { content, totalLines } = await editor.read({
+    url: 'https://example.com/app.js',
+  })
+  console.log('Total lines:', totalLines)
+  console.log(content)
 
-// Find a function definition
-const funcDef = await editor.grep({
-  regex: /function\s+handleSubmit|handleSubmit\s*=/
-});
-```
+  const { content: partial } = await editor.read({
+    url: 'https://example.com/app.js',
+    offset: 100,
+    limit: 50,
+  })
+  console.log(partial)
+}
 
----
+// Example: Edit a script (exact string replacement)
+async function editScript() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
 
-## Common Patterns
+  await editor.edit({
+    url: 'https://example.com/app.js',
+    oldString: 'const DEBUG = false',
+    newString: 'const DEBUG = true',
+  })
 
-### Toggle a Feature Flag
+  const dryRunResult = await editor.edit({
+    url: 'https://example.com/app.js',
+    oldString: 'old code',
+    newString: 'new code',
+    dryRun: true,
+  })
+  console.log('Dry run result:', dryRunResult)
+}
 
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
+// Example: Search across all scripts
+async function searchScripts() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
 
-// Find the config file
-const configs = await editor.list({ pattern: /config/ });
+  const matches = await editor.grep({ regex: /console\.log/ })
+  console.log(matches)
 
-// Enable a feature
-await editor.edit({
-  url: configs[0],
-  oldString: "FEATURE_X_ENABLED: false",
-  newString: "FEATURE_X_ENABLED: true"
-});
+  const todoMatches = await editor.grep({
+    regex: /TODO|FIXME/i,
+    pattern: /app/,
+  })
+  console.log(todoMatches)
+}
 
-// Reload to pick up the change
-await page.reload();
-```
+// Example: Write entire script content
+async function writeScript() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
 
-### Find and Fix a Bug
+  const { content } = await editor.read({ url: 'https://example.com/app.js' })
+  const newContent = content.replace(/console\.log/g, 'console.debug')
 
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
+  await editor.write({
+    url: 'https://example.com/app.js',
+    content: newContent,
+  })
+}
 
-// Search for the problematic code
-const matches = await editor.grep({ regex: /\.toFixed\(2\)/ });
-console.log('Found potential precision issues:', matches);
+// Example: Edit an inline script (scripts without URL get inline://{id} URLs)
+async function editInlineScript() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
 
-// Read context around the first match
-const { content } = await editor.read({
-  url: matches[0].url,
-  offset: matches[0].lineNumber - 5,
-  limit: 10
-});
-console.log(content);
+  const matches = await editor.grep({ regex: /myFunction/ })
+  if (matches.length > 0) {
+    const { url } = matches[0]
+    console.log('Found in:', url)
 
-// Fix it
-await editor.edit({
-  url: matches[0].url,
-  oldString: 'amount.toFixed(2)',
-  newString: 'Math.round(amount * 100) / 100'
-});
-```
-
-### Remove All Console Statements
-
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
-
-const logs = await editor.grep({
-  regex: /console\.(log|debug|info)\([^)]*\);?/,
-  pattern: /\.js/
-});
-
-for (const match of logs) {
-  try {
-    // Extract just the console statement
-    const consoleMatch = match.lineContent.match(/console\.(log|debug|info)\([^)]*\);?/);
-    if (consoleMatch) {
-      await editor.edit({
-        url: match.url,
-        oldString: consoleMatch[0],
-        newString: '/* removed */'
-      });
-    }
-  } catch (e) {
-    console.log(`Skipped ${match.url}:${match.lineNumber} - ${e.message}`);
+    await editor.edit({
+      url,
+      oldString: 'return false',
+      newString: 'return true',
+    })
   }
 }
+
+// Example: List and read CSS stylesheets
+async function readStylesheet() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
+
+  const stylesheets = await editor.list({ pattern: /\.css/ })
+  console.log('Stylesheets:', stylesheets)
+
+  if (stylesheets.length > 0) {
+    const { content, totalLines } = await editor.read({
+      url: stylesheets[0],
+    })
+    console.log('Total lines:', totalLines)
+    console.log(content)
+  }
+}
+
+// Example: Edit a CSS stylesheet
+async function editStylesheet() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
+
+  await editor.edit({
+    url: 'https://example.com/styles.css',
+    oldString: 'color: red',
+    newString: 'color: blue',
+  })
+}
+
+// Example: Search CSS for specific properties
+async function searchStyles() {
+  const cdp = await getCDPSession({ page })
+  const editor = createEditor({ cdp })
+  await editor.enable()
+
+  const matches = await editor.grep({
+    regex: /background-color/,
+    pattern: /\.css/,
+  })
+  console.log(matches)
+}
+
+export { listScripts, readScript, editScript, searchScripts, writeScript, editInlineScript, readStylesheet, editStylesheet, searchStyles }
+
 ```
-
-### Live CSS Editing
-
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
-
-// Find all stylesheets
-const css = await editor.list({ pattern: /\.css/ });
-console.log('Stylesheets:', css);
-
-// Read a stylesheet
-const { content } = await editor.read({ url: css[0] });
-console.log(content);
-
-// Change a color scheme
-await editor.edit({
-  url: css[0],
-  oldString: '--primary-color: #007bff',
-  newString: '--primary-color: #6f42c1'
-});
-
-// Changes apply immediately - no reload needed for CSS!
-```
-
-### Edit an Inline Script
-
-```js
-const cdp = await getCDPSession({ page });
-const editor = createEditor({ cdp });
-await editor.enable();
-
-// Inline scripts have URLs like "inline://123"
-const inlineScripts = await editor.list({ pattern: /^inline:/ });
-
-// Or find by searching for content
-const matches = await editor.grep({ regex: /myInlineFunction/ });
-const inlineUrl = matches[0].url;
-
-// Edit it like any other script
-await editor.edit({
-  url: inlineUrl,
-  oldString: 'return false',
-  newString: 'return true'
-});
-```
-
----
-
-## Troubleshooting
-
-### "Resource not found"
-
-The URL doesn't match any known script or stylesheet.
-
-**Fixes**:
-1. Check available resources: `await editor.list()`
-2. Use the exact URL from `list()` or `grep()`
-3. Reload the page after `enable()` to capture all scripts
-
-### "oldString not found"
-
-The exact string doesn't exist in the file.
-
-**Fixes**:
-1. Read the file first to see actual content: `await editor.read({ url })`
-2. Watch for whitespace differences (tabs vs spaces, line endings)
-3. The content may have already been edited
-
-### "oldString found N times"
-
-The string appears multiple times. The editor won't guess which one to replace.
-
-**Fix**: Include more surrounding context to make it unique:
-
-```js
-// Too ambiguous
-await editor.edit({
-  oldString: 'return true',
-  newString: 'return false'
-});
-
-// Add context
-await editor.edit({
-  oldString: 'function validate() {\n  return true',
-  newString: 'function validate() {\n  return false'
-});
-```
-
-### Changes don't persist after reload
-
-This is expected behavior. Edits are in-memory only.
-
-**Options**:
-1. Make the change in your source code and rebuild
-2. Re-apply the edit after each reload
-3. Use a browser extension for persistent overrides
-
-### Scripts list is empty after enable()
-
-Scripts are discovered as they're parsed. If you enable before the page loads, you may miss scripts.
-
-**Fix**:
-```js
-await editor.enable();
-await page.reload();  // Now all scripts will be captured
-await page.waitForLoadState('domcontentloaded');
-const scripts = await editor.list();
-```
-
-### CSS changes apply but JS changes don't
-
-For JavaScript, changes apply to newly executed code. If a function already ran, the old version ran. You may need to trigger the code path again.
-
-For CSS, changes apply immediately because the browser re-renders with new styles.
