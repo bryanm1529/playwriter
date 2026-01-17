@@ -100,7 +100,7 @@ interface VMContext {
   getStylesForLocator: (options: { locator: any }) => Promise<StylesResult>
   formatStylesAsText: (styles: StylesResult) => string
   getReactSource: (options: { locator: any }) => Promise<ReactSourceLocation | null>
-  screenshotWithAccessibilityLabels: (options: { page: Page; interactiveOnly?: boolean }) => Promise<void>
+  screenshotWithAccessibilityLabels: (options: { page: Page; interactiveOnly?: boolean; timeout?: number }) => Promise<void>
   require: NodeRequire
   import: (specifier: string) => Promise<any>
 }
@@ -1030,7 +1030,7 @@ server.tool(
       // Collector for screenshots taken during this execution
       const screenshotCollector: ScreenshotResult[] = []
 
-      const screenshotWithAccessibilityLabelsFn = async (options: { page: Page; interactiveOnly?: boolean }) => {
+      const screenshotWithAccessibilityLabelsFn = async (options: { page: Page; interactiveOnly?: boolean; timeout?: number }) => {
         return screenshotWithAccessibilityLabels({ ...options, collector: screenshotCollector })
       }
 

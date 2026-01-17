@@ -110,6 +110,10 @@ const CONTAINER_STYLES = css`
   pointer-events: none;
 `
 
+// Default limits to prevent slow pages from causing timeouts
+const MAX_ARIA_REFS = 500 // Max number of elements to probe
+const ELEMENT_HANDLE_TIMEOUT = 100 // Fast timeout for element handle (ms)
+
 /**
  * Get an accessibility snapshot with utilities to look up aria refs for elements.
  * Uses Playwright's internal aria-ref selector engine.
@@ -121,7 +125,10 @@ const CONTAINER_STYLES = css`
  * // refs[0].ref is e.g. "e5" - use page.locator('aria-ref=e5') to select
  * ```
  */
-export async function getAriaSnapshot({ page }: { page: Page }): Promise<AriaSnapshotResult> {
+export async function getAriaSnapshot({ page, maxRefs = MAX_ARIA_REFS }: {
+  page: Page
+  maxRefs?: number
+}): Promise<AriaSnapshotResult> {
   const snapshotMethod = (page as any)._snapshotForAI
   if (!snapshotMethod) {
     throw new Error('_snapshotForAI not available. Ensure you are using Playwright.')
@@ -133,13 +140,14 @@ export async function getAriaSnapshot({ page }: { page: Page }): Promise<AriaSna
   const snapshotStr = rawStr.toWellFormed?.() ?? rawStr
 
   // Discover refs by probing aria-ref=e1, e2, e3... until 10 consecutive misses
+  // Limited by maxRefs to prevent slow pages from causing timeouts
   const refToElement = new Map<string, { role: string; name: string }>()
   const refHandles: Array<{ ref: string; handle: ElementHandle }> = []
 
   let consecutiveMisses = 0
   let refNum = 1
 
-  while (consecutiveMisses < 10) {
+  while (consecutiveMisses < 10 && refNum <= maxRefs) {
     const ref = `e${refNum++}`
     try {
       const locator = page.locator(`aria-ref=${ref}`)
@@ -156,7 +164,7 @@ export async function getAriaSnapshot({ page }: { page: Page }): Promise<AriaSna
             }[el.tagName.toLowerCase()] || 'generic',
             name: el.getAttribute('aria-label') || el.textContent?.trim() || el.placeholder || '',
           })),
-          locator.elementHandle({ timeout: 1000 }),
+          locator.elementHandle({ timeout: ELEMENT_HANDLE_TIMEOUT }),
         ])
         refToElement.set(ref, info)
         if (handle) {
@@ -544,12 +552,16 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
   }, LABELS_CONTAINER_ID)
 }
 
+// Default screenshot timeout (ms)
+const DEFAULT_SCREENSHOT_TIMEOUT = 10000
+
 /**
  * Take a screenshot with accessibility labels overlaid on interactive elements.
  * Shows Vimium-style labels, captures the screenshot, then removes the labels.
  * The screenshot is automatically included in the MCP response.
  *
  * @param collector - Array to collect screenshots (passed by MCP execute tool)
+ * @param timeout - Timeout for screenshot operation (default: 10000ms)
  *
  * @example
  * ```ts
@@ -559,10 +571,11 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
  * await page.locator('aria-ref=e5').click()
  * ```
  */
-export async function screenshotWithAccessibilityLabels({ page, interactiveOnly = true, collector }: {
+export async function screenshotWithAccessibilityLabels({ page, interactiveOnly = true, collector, timeout = DEFAULT_SCREENSHOT_TIMEOUT }: {
   page: Page
   interactiveOnly?: boolean
   collector: ScreenshotResult[]
+  timeout?: number
 }): Promise<void> {
   // Show labels and get snapshot
   const { snapshot, labelCount } = await showAriaRefLabels({ page, interactiveOnly })
@@ -589,6 +602,7 @@ export async function screenshotWithAccessibilityLabels({ page, interactiveOnly 
     type: 'jpeg',
     quality: 80,
     scale: 'css',
+    timeout,
     clip: {
       x: 0,
       y: 0,
