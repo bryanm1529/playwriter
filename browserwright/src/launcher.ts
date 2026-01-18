@@ -281,20 +281,40 @@ async function spawnChrome(options: {
 
   console.error(`[browserwright] Chrome spawned with PID ${pid}`)
 
-  // Wait for Chrome to be ready
+  // Wait for Chrome to be ready with diagnostic feedback
   const maxWait = 10000 // 10 seconds
   const startTime = Date.now()
+  let lastAttempt = 0
 
   while (Date.now() - startTime < maxWait) {
+    lastAttempt++
     const wsUrl = await tryConnectToExistingBrowser(options.port)
     if (wsUrl) {
       console.error(`[browserwright] Chrome is ready on port ${options.port}`)
       return { pid }
     }
+    // Progress feedback every 2 seconds
+    if (lastAttempt % 20 === 0) {
+      console.error(`[browserwright] Waiting for Chrome... (${Math.round((Date.now() - startTime) / 1000)}s)`)
+    }
     await new Promise(resolve => setTimeout(resolve, 100))
   }
 
-  throw new Error(`Chrome did not become ready on port ${options.port} within ${maxWait}ms`)
+  // Provide diagnostic hints for common issues
+  const processStillRunning = isProcessRunning(pid)
+  let diagnosticHints = ''
+
+  if (!processStillRunning) {
+    diagnosticHints = '\n  - Chrome process exited unexpectedly. Check for crash dialogs or permission issues.'
+  } else {
+    diagnosticHints = `\n  - Chrome process (PID ${pid}) is running but not responding on port ${options.port}.`
+    diagnosticHints += '\n  - Possible causes: port already in use by another process, firewall blocking, or Chrome hanging during startup.'
+    diagnosticHints += `\n  - Try: kill any existing Chrome processes, or use a different port via the 'port' option.`
+  }
+
+  throw new Error(
+    `Chrome did not become ready on port ${options.port} within ${maxWait}ms.${diagnosticHints}`
+  )
 }
 
 /**
@@ -354,17 +374,22 @@ export async function launchBrowser(options: LaunchOptions = {}): Promise<Launch
     console.error(`[browserwright] Found lock file (PID: ${lockData.pid}, port: ${lockData.port})`)
 
     // Check if the process is still running
-    if (isProcessRunning(lockData.pid)) {
-      // Try to connect to the existing browser
+    const pidAlive = isProcessRunning(lockData.pid)
+    if (pidAlive) {
+      // PID exists, but verify port actually responds (catches zombie processes)
       const wsUrl = await tryConnectToExistingBrowser(lockData.port)
       if (wsUrl) {
         console.error(`[browserwright] Connecting to existing browser...`)
         return connectToCDP(wsUrl)
       }
+      // PID alive but port not responding - likely a zombie or crashed browser
+      console.error(`[browserwright] Process ${lockData.pid} exists but port ${lockData.port} not responding (zombie or crashed)`)
+    } else {
+      console.error(`[browserwright] Process ${lockData.pid} no longer exists`)
     }
 
     // Lock file is stale - clean it up
-    console.error(`[browserwright] Stale lock file detected, cleaning up...`)
+    console.error(`[browserwright] Cleaning up stale lock file...`)
     removeLockFile()
   }
 

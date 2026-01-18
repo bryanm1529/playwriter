@@ -612,7 +612,10 @@ async function getCurrentPage(timeout = 5000) {
 
       if (pages.length > 0) {
         const page = pages[0]
-        await page.waitForLoadState('domcontentloaded', { timeout }).catch(() => {})
+        await page.waitForLoadState('domcontentloaded', { timeout }).catch((err) => {
+          // Log warning but don't fail - page may still be usable for navigation commands
+          mcpLog(`Warning: Page load state check failed (${err.message}). Page may be slow or unresponsive.`)
+        })
         return page
       }
     }
@@ -1105,13 +1108,21 @@ server.tool(
       const resolvedCode = RefRegistry.resolveShortRefs(code)
       const wrappedCode = `(async () => { ${resolvedCode} })()`
 
-      const result = await Promise.race([
-        vm.runInContext(wrappedCode, vmContext, {
+      // Use vm.runInContext's built-in timeout (it actually terminates execution)
+      // Don't use Promise.race with setTimeout - it can't stop VM execution and creates race conditions
+      let result: unknown
+      try {
+        result = await vm.runInContext(wrappedCode, vmContext, {
           timeout,
           displayErrors: true,
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new CodeExecutionTimeoutError(timeout)), timeout)),
-      ])
+        })
+      } catch (vmError: any) {
+        // VM timeout throws generic Error, wrap it in our custom error for consistent handling
+        if (vmError.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
+          throw new CodeExecutionTimeoutError(timeout)
+        }
+        throw vmError
+      }
 
       let responseText = formatConsoleLogs(consoleLogs)
 
@@ -1133,12 +1144,38 @@ server.tool(
         responseText += `Accessibility snapshot:\n${screenshot.snapshot}\n`
       }
 
+      // Smart truncation: preserve return value and screenshot info, only truncate console logs
       const MAX_LENGTH = 6000
       let finalText = responseText.trim()
       if (finalText.length > MAX_LENGTH) {
-        finalText =
-          finalText.slice(0, MAX_LENGTH) +
-          `\n\n[Truncated to ${MAX_LENGTH} characters. Better manage your logs or paginate them to read the full logs]`
+        // Build response parts separately so we can truncate logs while preserving important info
+        const consoleLogsText = formatConsoleLogs(consoleLogs)
+        let importantParts = ''
+
+        // Return value is important - never truncate
+        if (result !== undefined) {
+          importantParts += '\nReturn value:\n'
+          importantParts += typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+        }
+
+        // Screenshot info is important - never truncate
+        for (const screenshot of screenshotCollector) {
+          importantParts += `\nScreenshot saved to: ${screenshot.path}\n`
+          importantParts += `Labels shown: ${screenshot.labelCount}\n\n`
+          importantParts += `Accessibility snapshot:\n${screenshot.snapshot}\n`
+        }
+
+        // Calculate how much room we have for logs
+        const truncationNotice = `\n\n[Console logs truncated. ${consoleLogs.length} total log entries. Use pagination or filter logs to see full output]`
+        const availableForLogs = MAX_LENGTH - importantParts.length - truncationNotice.length
+
+        if (availableForLogs > 500) {
+          // Truncate logs, keep important parts intact
+          finalText = consoleLogsText.slice(0, availableForLogs) + truncationNotice + importantParts
+        } else {
+          // Not enough room - show important parts with minimal logs
+          finalText = consoleLogsText.slice(0, 500) + truncationNotice + importantParts
+        }
       }
 
       // Build content array with text and any collected screenshots

@@ -204,7 +204,7 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
 
   async function sendToExtension({ method, params, timeout = 30000 }: { method: string; params?: any; timeout?: number }) {
     if (!extensionWs) {
-      throw new Error('Extension not connected')
+      throw new Error('Extension not connected. Is the Browserwright extension installed and enabled?')
     }
 
     const id = ++extensionMessageId
@@ -215,7 +215,16 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         extensionPendingRequests.delete(id)
-        reject(new Error(`Extension request timeout after ${timeout}ms: ${method}`))
+        // Include diagnostic context to help users understand WHY the timeout occurred
+        const pendingCount = extensionPendingRequests.size
+        const targetCount = connectedTargets.size
+        const diagnosticInfo = [
+          `method: ${method}`,
+          `extension connected: ${!!extensionWs}`,
+          `pending requests: ${pendingCount}`,
+          `active targets: ${targetCount}`,
+        ].join(', ')
+        reject(new Error(`Extension request timeout after ${timeout}ms (${diagnosticInfo}). The extension may be overloaded, the page unresponsive, or the Chrome DevTools panel closed.`))
       }, timeout)
 
       extensionPendingRequests.set(id, {
@@ -609,7 +618,8 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
                 }
               } satisfies CDPEventFor<'Target.attachedToTarget'>
               if (!target.targetInfo.url) {
-                logger?.error(chalk.red('[Server] WARNING: Target.attachedToTarget sent with empty URL!'), JSON.stringify(attachedPayload))
+                // Empty URL is common during initial connection - log as debug, not error
+                logger?.log(chalk.gray('[Server] Note: Target.attachedToTarget has empty URL (normal during page creation)'))
               }
               logger?.log(chalk.magenta('[Server] Target.attachedToTarget full payload:'), JSON.stringify(attachedPayload))
               sendToPlaywright({
@@ -636,7 +646,8 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
                 }
               } satisfies CDPEventFor<'Target.targetCreated'>
               if (!target.targetInfo.url) {
-                logger?.error(chalk.red('[Server] WARNING: Target.targetCreated sent with empty URL!'), JSON.stringify(targetCreatedPayload))
+                // Empty URL is common during initial connection - log as debug, not error
+                logger?.log(chalk.gray('[Server] Note: Target.targetCreated has empty URL (normal during page creation)'))
               }
               logger?.log(chalk.magenta('[Server] Target.targetCreated full payload:'), JSON.stringify(targetCreatedPayload))
               sendToPlaywright({
@@ -663,7 +674,8 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
                 }
               } satisfies CDPEventFor<'Target.attachedToTarget'>
               if (!target.targetInfo.url) {
-                logger?.error(chalk.red('[Server] WARNING: Target.attachedToTarget (from attachToTarget) sent with empty URL!'), JSON.stringify(attachedPayload))
+                // Empty URL is common during initial connection - log as debug, not error
+                logger?.log(chalk.gray('[Server] Note: Target.attachedToTarget (from attachToTarget) has empty URL (normal during page creation)'))
               }
               logger?.log(chalk.magenta('[Server] Target.attachedToTarget (from attachToTarget) payload:'), JSON.stringify(attachedPayload))
               sendToPlaywright({
@@ -738,8 +750,17 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
 
           // Clear state from the old connection to prevent leaks
           connectedTargets.clear()
+          // Reject pending requests with context about which methods were interrupted
+          const pendingMethods: string[] = []
+          for (const [id, pending] of extensionPendingRequests.entries()) {
+            // The ID can hint at the method if we track it (we don't currently, so note the count)
+            pendingMethods.push(`request #${id}`)
+          }
+          const pendingInfo = pendingMethods.length > 0
+            ? ` Interrupted requests: ${pendingMethods.slice(0, 5).join(', ')}${pendingMethods.length > 5 ? ` (+${pendingMethods.length - 5} more)` : ''}`
+            : ''
           for (const pending of extensionPendingRequests.values()) {
-            pending.reject(new Error('Extension connection replaced'))
+            pending.reject(new Error(`Extension connection replaced - reconnecting.${pendingInfo}`))
           }
           extensionPendingRequests.clear()
 
@@ -816,7 +837,8 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
             }
 
             if (!targetParams.targetInfo.url) {
-              logger?.error(chalk.red('[Extension] WARNING: Target.attachedToTarget received with empty URL!'), JSON.stringify({ method, params: targetParams, sessionId }))
+              // Empty URL is common during initial connection - log as debug, not error
+              logger?.log(chalk.gray('[Extension] Note: Target.attachedToTarget has empty URL (normal during page creation)'))
             }
             logger?.log(chalk.yellow('[Extension] Target.attachedToTarget full payload:'), JSON.stringify({ method, params: targetParams, sessionId }))
 
