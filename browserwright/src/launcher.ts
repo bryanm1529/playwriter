@@ -2,23 +2,29 @@
  * Browser launcher for "just works" mode
  * Spawns Chrome with debugging enabled and persistent profile
  *
- * Supports multiple MCP sessions by:
- * 1. Launching Chrome with a debugging port
- * 2. Subsequent sessions connect to the existing browser via CDP
+ * Session Persistence Solution:
+ * - Uses spawn() instead of launchPersistentContext (which uses --remote-debugging-pipe)
+ * - Launches Chrome with --remote-debugging-port for CDP access
+ * - Lock file tracks browser PID for cross-session reconnection
+ * - Subsequent MCP sessions connect to existing browser via CDP
  *
- * Based on best practices from:
- * - Microsoft Playwright MCP: https://github.com/microsoft/playwright-mcp
- * - BrowserStack Guide: https://www.browserstack.com/guide/playwright-persistent-context
- * - Playwright Issue #19742: https://github.com/microsoft/playwright/issues/19742
+ * Based on research from:
+ * - Chrome DevTools Blog: https://developer.chrome.com/blog/remote-debugging-port
+ * - Playwright MCP #1130: https://github.com/microsoft/playwright-mcp/issues/1130
+ * - mcp-playwright-cdp: https://github.com/lars-hagen/mcp-playwright-cdp
  */
 
 import { chromium, BrowserContext, Browser, devices } from 'playwright-core'
+import { spawn, spawnSync } from 'node:child_process'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 
 // Default debugging port for multi-session support
 const DEFAULT_DEBUG_PORT = 9222
+
+// Lock file for tracking browser process across sessions
+const LOCK_FILE_NAME = 'browser.lock'
 
 export type BrowserChannel = 'chrome' | 'chrome-beta' | 'chrome-dev' | 'chrome-canary' | 'msedge' | 'msedge-beta' | 'msedge-dev'
 
@@ -41,6 +47,8 @@ export interface LaunchOptions {
   executablePath?: string
   /** Additional browser args */
   args?: string[]
+  /** Debugging port (default: 9222) */
+  port?: number
 }
 
 export interface LaunchedBrowser {
@@ -52,11 +60,17 @@ export interface LaunchedBrowser {
   close: () => Promise<void>
 }
 
+interface LockFileData {
+  port: number
+  pid: number
+  started: string
+  userDataDir: string
+}
+
 /**
- * Get the default user data directory for persistent browser profiles
- * Follows the same pattern as Microsoft Playwright MCP
+ * Get the browserwright cache directory
  */
-export function getDefaultUserDataDir(channel: BrowserChannel = 'chrome'): string {
+function getCacheDir(): string {
   const platform = process.platform
   const cacheDir = platform === 'darwin'
     ? path.join(os.homedir(), 'Library', 'Caches')
@@ -64,39 +78,68 @@ export function getDefaultUserDataDir(channel: BrowserChannel = 'chrome'): strin
       ? process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
       : path.join(os.homedir(), '.cache')
 
-  // Match Playwright MCP pattern: mcp-{channel}-profile
-  return path.join(cacheDir, 'browserwright', `mcp-${channel}-profile`)
+  return path.join(cacheDir, 'browserwright')
 }
 
 /**
- * Check if a browser profile is currently locked (in use by another process)
- * Chrome creates a SingletonLock file when using a profile
+ * Get the default user data directory for persistent browser profiles
  */
-export function isProfileLocked(userDataDir: string): boolean {
-  const lockFile = path.join(userDataDir, 'SingletonLock')
+export function getDefaultUserDataDir(channel: BrowserChannel = 'chrome'): string {
+  return path.join(getCacheDir(), `mcp-${channel}-profile`)
+}
+
+/**
+ * Get the lock file path
+ */
+function getLockFilePath(): string {
+  return path.join(getCacheDir(), LOCK_FILE_NAME)
+}
+
+/**
+ * Read the lock file if it exists
+ */
+function readLockFile(): LockFileData | null {
   try {
-    // On Linux, SingletonLock is a symlink pointing to the PID
-    const stats = fs.lstatSync(lockFile)
-    if (stats.isSymbolicLink()) {
-      // Check if the PID in the symlink is still running
-      try {
-        const target = fs.readlinkSync(lockFile)
-        // Format is typically "hostname-pid" or just the hostname
-        const pidMatch = target.match(/-(\d+)$/)
-        if (pidMatch) {
-          const pid = parseInt(pidMatch[1], 10)
-          // Check if process is running (signal 0 doesn't kill, just checks)
-          process.kill(pid, 0)
-          return true // Process is running
-        }
-      } catch {
-        // Process not running or can't check - assume not locked
-        return false
-      }
+    const lockPath = getLockFilePath()
+    if (fs.existsSync(lockPath)) {
+      const data = JSON.parse(fs.readFileSync(lockPath, 'utf-8'))
+      return data as LockFileData
     }
-    return stats.isFile() || stats.isSymbolicLink()
   } catch {
-    return false // Lock file doesn't exist
+    // Lock file doesn't exist or is corrupted
+  }
+  return null
+}
+
+/**
+ * Write the lock file
+ */
+function writeLockFile(data: LockFileData): void {
+  const lockPath = getLockFilePath()
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true })
+  fs.writeFileSync(lockPath, JSON.stringify(data, null, 2))
+}
+
+/**
+ * Remove the lock file
+ */
+function removeLockFile(): void {
+  try {
+    fs.unlinkSync(getLockFilePath())
+  } catch {
+    // Ignore if doesn't exist
+  }
+}
+
+/**
+ * Check if a process is still running
+ */
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0) // Signal 0 just checks if process exists
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -150,13 +193,143 @@ export async function connectToCDP(cdpEndpoint: string): Promise<LaunchedBrowser
 }
 
 /**
+ * Get the default Chrome/Chromium arguments
+ * Based on Playwright's defaults but without --remote-debugging-pipe
+ */
+function getDefaultArgs(options: {
+  port: number
+  userDataDir: string
+  headless: boolean
+}): string[] {
+  const args = [
+    // CDP port for multi-session support (required for session persistence)
+    `--remote-debugging-port=${options.port}`,
+    // User data dir (required with --remote-debugging-port per Chrome 136)
+    `--user-data-dir=${options.userDataDir}`,
+    // Playwright defaults for automation
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-breakpad',
+    '--disable-client-side-phishing-detection',
+    '--disable-component-extensions-with-background-pages',
+    '--disable-component-update',
+    '--disable-default-apps',
+    '--disable-dev-shm-usage',
+    '--disable-extensions',
+    '--disable-hang-monitor',
+    '--disable-ipc-flooding-protection',
+    '--disable-popup-blocking',
+    '--disable-prompt-on-repost',
+    '--disable-renderer-backgrounding',
+    '--disable-sync',
+    '--enable-features=NetworkService,NetworkServiceInProcess',
+    '--force-color-profile=srgb',
+    '--metrics-recording-only',
+    '--no-first-run',
+    '--password-store=basic',
+    '--use-mock-keychain',
+    // Reduce automation detection
+    '--disable-blink-features=AutomationControlled',
+    // Docker/container support
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+  ]
+
+  if (options.headless) {
+    args.push('--headless=new')
+  }
+
+  return args
+}
+
+/**
+ * Spawn Chrome as a detached background process
+ */
+async function spawnChrome(options: {
+  executablePath: string
+  args: string[]
+  userDataDir: string
+  port: number
+}): Promise<{ pid: number }> {
+  console.error(`[browserwright] Spawning Chrome...`)
+  console.error(`[browserwright] Executable: ${options.executablePath}`)
+  console.error(`[browserwright] Port: ${options.port}`)
+  console.error(`[browserwright] Profile: ${options.userDataDir}`)
+
+  // Spawn Chrome as detached background process
+  const child = spawn(options.executablePath, [...options.args, 'about:blank'], {
+    detached: true,
+    stdio: 'ignore',
+  })
+
+  // Don't wait for the process - let it run in background
+  child.unref()
+
+  const pid = child.pid
+  if (!pid) {
+    throw new Error('Failed to spawn Chrome - no PID returned')
+  }
+
+  // Write lock file for cross-session tracking
+  writeLockFile({
+    port: options.port,
+    pid,
+    started: new Date().toISOString(),
+    userDataDir: options.userDataDir,
+  })
+
+  console.error(`[browserwright] Chrome spawned with PID ${pid}`)
+
+  // Wait for Chrome to be ready
+  const maxWait = 10000 // 10 seconds
+  const startTime = Date.now()
+
+  while (Date.now() - startTime < maxWait) {
+    const wsUrl = await tryConnectToExistingBrowser(options.port)
+    if (wsUrl) {
+      console.error(`[browserwright] Chrome is ready on port ${options.port}`)
+      return { pid }
+    }
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+
+  throw new Error(`Chrome did not become ready on port ${options.port} within ${maxWait}ms`)
+}
+
+/**
+ * Kill Chrome process and its children
+ * Uses spawnSync instead of exec for security (no shell injection)
+ */
+function killChrome(pid: number): void {
+  console.error(`[browserwright] Killing Chrome process ${pid}...`)
+
+  if (process.platform === 'win32') {
+    // Windows: use taskkill with /T (tree) and /F (force)
+    // Using spawnSync with args array prevents shell injection
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      stdio: 'ignore',
+    })
+  } else {
+    // Unix: kill process group
+    try {
+      process.kill(-pid, 'SIGKILL') // Negative PID kills process group
+    } catch {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // Process already dead
+      }
+    }
+  }
+
+  removeLockFile()
+  console.error(`[browserwright] Chrome process killed`)
+}
+
+/**
  * Launch a browser with debugging enabled and persistent profile
- * This enables "just works" mode without needing the extension
- *
- * Multi-session support:
- * - First session launches Chrome with --remote-debugging-port
- * - Subsequent sessions connect to the existing browser via CDP
- * - All sessions share the same browser instance
+ * Uses spawn() instead of launchPersistentContext for session persistence
  */
 export async function launchBrowser(options: LaunchOptions = {}): Promise<LaunchedBrowser> {
   // If CDP endpoint provided, connect instead of launching
@@ -165,48 +338,77 @@ export async function launchBrowser(options: LaunchOptions = {}): Promise<Launch
   }
 
   const channel = options.channel ?? 'chrome'
+  const port = options.port ?? DEFAULT_DEBUG_PORT
 
   // Isolated mode uses temp directory
   const userDataDir = options.isolated
     ? fs.mkdtempSync(path.join(os.tmpdir(), 'browserwright-'))
     : (options.userDataDir || getDefaultUserDataDir(channel))
 
-  // For persistent mode, check if another session is already using the browser
-  if (!options.isolated) {
-    // First, try to connect to an existing browser on the debugging port
-    const existingWsUrl = await tryConnectToExistingBrowser(DEFAULT_DEBUG_PORT)
-    if (existingWsUrl) {
-      console.error(`[browserwright] Found existing browser, connecting via CDP...`)
-      return connectToCDP(existingWsUrl)
-    }
-
-    // Check if profile is locked (browser running without debugging port)
-    if (isProfileLocked(userDataDir)) {
-      console.error(`[browserwright] Profile is locked by another process`)
-      console.error(`[browserwright] Tip: Close other Chrome instances or use --isolated mode`)
-
-      // Try common debugging ports in case browser was started with one
-      for (const port of [9222, 9223, 9224]) {
-        const wsUrl = await tryConnectToExistingBrowser(port)
-        if (wsUrl) {
-          console.error(`[browserwright] Found browser on port ${port}, connecting...`)
-          return connectToCDP(wsUrl)
-        }
-      }
-
-      // Last resort: fall back to isolated mode
-      console.error(`[browserwright] Falling back to isolated mode (temporary profile)`)
-      return launchBrowser({ ...options, isolated: true })
-    }
-  }
-
   // Ensure the profile directory exists
   fs.mkdirSync(userDataDir, { recursive: true })
 
-  console.error(`[browserwright] Launching browser...`)
+  // Step 1: Check for existing browser via lock file
+  const lockData = readLockFile()
+  if (lockData && !options.isolated) {
+    console.error(`[browserwright] Found lock file (PID: ${lockData.pid}, port: ${lockData.port})`)
+
+    // Check if the process is still running
+    if (isProcessRunning(lockData.pid)) {
+      // Try to connect to the existing browser
+      const wsUrl = await tryConnectToExistingBrowser(lockData.port)
+      if (wsUrl) {
+        console.error(`[browserwright] Connecting to existing browser...`)
+        return connectToCDP(wsUrl)
+      }
+    }
+
+    // Lock file is stale - clean it up
+    console.error(`[browserwright] Stale lock file detected, cleaning up...`)
+    removeLockFile()
+  }
+
+  // Step 2: Check if browser is running on the port (might have been started externally)
+  if (!options.isolated) {
+    const existingWsUrl = await tryConnectToExistingBrowser(port)
+    if (existingWsUrl) {
+      console.error(`[browserwright] Found existing browser on port ${port}, connecting...`)
+      return connectToCDP(existingWsUrl)
+    }
+  }
+
+  // Step 3: Launch new browser
+  console.error(`[browserwright] Launching new browser...`)
   console.error(`[browserwright] Mode: ${options.isolated ? 'isolated' : 'persistent'}`)
-  console.error(`[browserwright] Profile: ${userDataDir}`)
-  console.error(`[browserwright] Channel: ${channel}`)
+
+  // Get executable path
+  const executablePath = options.executablePath || chromium.executablePath()
+
+  // Build args
+  const defaultArgs = getDefaultArgs({
+    port,
+    userDataDir,
+    headless: options.headless ?? false,
+  })
+  const allArgs = [...defaultArgs, ...(options.args || [])]
+
+  // Spawn Chrome
+  await spawnChrome({
+    executablePath,
+    args: allArgs,
+    userDataDir,
+    port,
+  })
+
+  // Connect via CDP
+  const wsUrl = await tryConnectToExistingBrowser(port)
+  if (!wsUrl) {
+    throw new Error('Failed to connect to Chrome after spawning')
+  }
+
+  const browser = await chromium.connectOverCDP(wsUrl)
+  const contexts = browser.contexts()
+  let context = contexts[0]
 
   // Get device emulation settings if specified
   const deviceDescriptor = options.device ? devices[options.device] : undefined
@@ -214,81 +416,75 @@ export async function launchBrowser(options: LaunchOptions = {}): Promise<Launch
     console.error(`[browserwright] Warning: Unknown device "${options.device}", ignoring`)
   }
 
-  // Combine base args with any custom args
-  // Include debugging port for multi-session support
-  const baseArgs = [
-    // Reduce automation detection
-    '--disable-blink-features=AutomationControlled',
-    // Enable debugging port so other sessions can connect
-    `--remote-debugging-port=${DEFAULT_DEBUG_PORT}`,
-  ]
-  const allArgs = [...baseArgs, ...(options.args || [])]
-
-  try {
-    // Launch persistent context - this keeps logins between sessions
-    const context = await chromium.launchPersistentContext(userDataDir, {
-      headless: options.headless ?? false,
-      channel,
-      executablePath: options.executablePath,
+  // Create new context with viewport settings if needed
+  if (!context) {
+    context = await browser.newContext({
       viewport: deviceDescriptor?.viewport || options.viewport || { width: 1280, height: 720 },
       userAgent: deviceDescriptor?.userAgent,
       deviceScaleFactor: deviceDescriptor?.deviceScaleFactor,
       isMobile: deviceDescriptor?.isMobile,
       hasTouch: deviceDescriptor?.hasTouch,
-      args: allArgs,
-      ignoreDefaultArgs: ['--enable-automation'],
     })
+  }
 
-    // Get browser reference (may be null for persistent contexts)
-    const browser = context.browser()
+  // Ensure at least one page exists
+  if (context.pages().length === 0) {
+    await context.newPage()
+  }
 
-    // Create initial page if none exists
-    if (context.pages().length === 0) {
-      await context.newPage()
-    }
+  console.error(`[browserwright] Browser launched successfully`)
+  console.error(`[browserwright] Debugging port: ${port} (other sessions can connect)`)
 
-    console.error(`[browserwright] Browser launched successfully`)
-    console.error(`[browserwright] Debugging port: ${DEFAULT_DEBUG_PORT} (other sessions can connect)`)
-
-    return {
-      context,
-      browser,
-      wsEndpoint: `ws://127.0.0.1:${DEFAULT_DEBUG_PORT}`,
-      userDataDir,
-      mode: options.isolated ? 'isolated' : 'launch',
-      close: async () => {
-        await context.close()
-        // Clean up temp directory for isolated mode
-        if (options.isolated) {
-          try {
-            fs.rmSync(userDataDir, { recursive: true, force: true })
-          } catch {
-            // Ignore cleanup errors
-          }
+  return {
+    context,
+    browser,
+    wsEndpoint: wsUrl,
+    userDataDir,
+    mode: options.isolated ? 'isolated' : 'launch',
+    close: async () => {
+      // For isolated mode, kill the browser entirely
+      if (options.isolated) {
+        const lockData = readLockFile()
+        if (lockData?.pid) {
+          killChrome(lockData.pid)
         }
+        // Clean up temp directory
+        try {
+          fs.rmSync(userDataDir, { recursive: true, force: true })
+        } catch {
+          // Ignore cleanup errors
+        }
+      } else {
+        // For persistent mode, just disconnect (browser stays running)
+        await browser.close()
       }
     }
-  } catch (error: any) {
-    // Handle "Opening in existing browser session" error
-    if (error.message?.includes('Target page, context or browser has been closed') ||
-        error.message?.includes('Opening in existing browser session')) {
-      console.error(`[browserwright] Launch failed: browser profile is in use`)
+  }
+}
 
-      // Wait a moment for the browser to fully start, then try to connect
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const wsUrl = await tryConnectToExistingBrowser(DEFAULT_DEBUG_PORT)
-      if (wsUrl) {
-        console.error(`[browserwright] Connecting to existing browser...`)
-        return connectToCDP(wsUrl)
+/**
+ * Check if a browser profile is currently locked
+ */
+export function isProfileLocked(userDataDir: string): boolean {
+  const lockFile = path.join(userDataDir, 'SingletonLock')
+  try {
+    const stats = fs.lstatSync(lockFile)
+    if (stats.isSymbolicLink()) {
+      try {
+        const target = fs.readlinkSync(lockFile)
+        const pidMatch = target.match(/-(\d+)$/)
+        if (pidMatch) {
+          const pid = parseInt(pidMatch[1], 10)
+          process.kill(pid, 0)
+          return true
+        }
+      } catch {
+        return false
       }
-
-      // Fall back to isolated mode
-      console.error(`[browserwright] Falling back to isolated mode`)
-      return launchBrowser({ ...options, isolated: true })
     }
-
-    throw error
+    return stats.isFile() || stats.isSymbolicLink()
+  } catch {
+    return false
   }
 }
 
@@ -304,4 +500,15 @@ export async function findExistingBrowser(port: number = DEFAULT_DEBUG_PORT): Pr
  */
 export function listDevices(): string[] {
   return Object.keys(devices)
+}
+
+/**
+ * Kill any existing browserwright browser and clean up
+ */
+export function cleanupBrowser(): void {
+  const lockData = readLockFile()
+  if (lockData?.pid) {
+    killChrome(lockData.pid)
+  }
+  removeLockFile()
 }

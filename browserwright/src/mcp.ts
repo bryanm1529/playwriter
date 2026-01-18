@@ -412,8 +412,19 @@ async function ensureRelayServer(): Promise<void> {
 }
 
 async function ensureConnection(): Promise<{ browser: Browser; page: Page }> {
+  // Validate that cached connection is actually still alive
   if (state.isConnected && state.browser && state.page) {
-    return { browser: state.browser, page: state.page }
+    // Check if page or browser has been closed
+    const pageStillValid = !state.page.isClosed()
+    const browserStillConnected = state.browser.isConnected()
+
+    if (pageStillValid && browserStillConnected) {
+      return { browser: state.browser, page: state.page }
+    }
+
+    // Cached connection is stale - clear and reconnect
+    mcpLog(`Connection stale (page closed: ${!pageStillValid}, browser disconnected: ${!browserStillConnected}) - reconnecting...`)
+    clearConnectionState()
   }
 
   // Launch mode: use launched browser instead of relay server
