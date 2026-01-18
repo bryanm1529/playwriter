@@ -199,7 +199,7 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
     }
   }
 
-  async function sendToExtension({ method, params, timeout = 30000 }: { method: string; params?: any; timeout?: number }) {
+  async function sendToExtension({ method, params, timeout = 10000 }: { method: string; params?: any; timeout?: number }) {
     if (!extensionWs) {
       throw new Error('Extension not connected. Is the Browserwright extension installed and enabled?')
     }
@@ -252,7 +252,7 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
 
     try {
       logger?.log(chalk.blue('Auto-creating initial tab for Playwright client'))
-      const result = await sendToExtension({ method: 'createInitialTab', timeout: 10000 }) as {
+      const result = await sendToExtension({ method: 'createInitialTab', timeout: 5000 }) as {
         success: boolean
         tabId: number
         sessionId: string

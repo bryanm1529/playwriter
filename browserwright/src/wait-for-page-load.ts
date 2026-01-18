@@ -57,7 +57,7 @@ export interface WaitForPageLoadResult {
 }
 
 export async function waitForPageLoad(options: WaitForPageLoadOptions): Promise<WaitForPageLoadResult> {
-  const { page, timeout = 30000, pollInterval = 100, minWait = 500 } = options
+  const { page, timeout = 15000, pollInterval = 100, minWait = 500 } = options
 
   const startTime = Date.now()
   let timedOut = false

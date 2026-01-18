@@ -551,8 +551,8 @@ export async function hideAriaRefLabels({ page }: { page: Page }): Promise<void>
   }, LABELS_CONTAINER_ID)
 }
 
-// Default screenshot timeout (ms)
-const DEFAULT_SCREENSHOT_TIMEOUT = 10000
+// Default screenshot timeout (ms) - tightened from 10s to 5s for faster failure feedback
+const DEFAULT_SCREENSHOT_TIMEOUT = 5000
 
 /**
  * Take a screenshot with accessibility labels overlaid on interactive elements.
