@@ -1215,6 +1215,7 @@ server.tool(
     } catch (error: any) {
       const errorStack = error.stack || error.message
       const isTimeoutError = error instanceof CodeExecutionTimeoutError || error.name === 'TimeoutError'
+      const isStaleError = error.message?.includes('stale') || error.message?.includes('no heartbeat')
 
       // Always log to stderr, but only send non-timeout errors to relay server
       console.error('Error in execute tool:', errorStack)
@@ -1224,9 +1225,15 @@ server.tool(
 
       const logsText = formatConsoleLogs(consoleLogs, 'Console output (before error)')
 
-      const resetHint = isTimeoutError
-        ? ''
-        : '\n\n[HINT: If this is an internal Playwright error, page/browser closed, or connection issue, call the `reset` tool to reconnect. Do NOT reset for other non-connection non-internal errors.]'
+      // Stale connection errors get a direct, actionable hint
+      let resetHint: string
+      if (isStaleError) {
+        resetHint = '\n\nTip: Call the reset tool to reconnect.'
+      } else if (isTimeoutError) {
+        resetHint = ''
+      } else {
+        resetHint = '\n\n[HINT: If this is an internal Playwright error, page/browser closed, or connection issue, call the `reset` tool to reconnect. Do NOT reset for other non-connection non-internal errors.]'
+      }
 
       return {
         content: [

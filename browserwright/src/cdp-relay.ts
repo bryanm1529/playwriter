@@ -77,14 +77,27 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
   }>()
   let extensionMessageId = 0
   let extensionPingInterval: ReturnType<typeof setInterval> | null = null
+  let lastPongReceived = 0  // Track last pong timestamp for stale connection detection
+
+  const PING_INTERVAL_MS = 5000
+  const PONG_TIMEOUT_MS = 12000  // 2 missed pings + 2s buffer
 
   function startExtensionPing() {
     if (extensionPingInterval) {
       clearInterval(extensionPingInterval)
     }
+    lastPongReceived = Date.now()  // Initialize on connect
+
     extensionPingInterval = setInterval(() => {
+      // Check for stale connection BEFORE sending ping
+      const timeSinceLastPong = Date.now() - lastPongReceived
+      if (timeSinceLastPong > PONG_TIMEOUT_MS) {
+        logger?.log(chalk.red(`Extension stale (no pong for ${timeSinceLastPong}ms) - disconnecting`))
+        extensionWs?.close(4002, 'Ping timeout')
+        return
+      }
       extensionWs?.send(JSON.stringify({ method: 'ping' }))
-    }, 5000)
+    }, PING_INTERVAL_MS)
   }
 
   function stopExtensionPing() {
@@ -202,6 +215,11 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
   async function sendToExtension({ method, params, timeout = 10000 }: { method: string; params?: any; timeout?: number }) {
     if (!extensionWs) {
       throw new Error('Extension not connected. Is the Browserwright extension installed and enabled?')
+    }
+
+    // Fast-fail if connection is stale (don't wait for 10s timeout)
+    if (lastPongReceived > 0 && (Date.now() - lastPongReceived) > PONG_TIMEOUT_MS) {
+      throw new Error('Extension connection stale - no heartbeat. Call reset tool to reconnect.')
     }
 
     const id = ++extensionMessageId
@@ -422,7 +440,14 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
   })
 
   app.get('/extension/status', (c) => {
-    return c.json({ connected: extensionWs !== null })
+    const connected = extensionWs !== null
+    const healthy = connected &&
+      (lastPongReceived === 0 || (Date.now() - lastPongReceived) < PONG_TIMEOUT_MS)
+    return c.json({
+      connected,
+      healthy,
+      lastPongMs: lastPongReceived > 0 ? Date.now() - lastPongReceived : null
+    })
   })
 
   // CDP Discovery Endpoints - Standard Chrome DevTools Protocol HTTP API
@@ -757,7 +782,7 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
             pending.resolve(message.result)
           }
         } else if (message.method === 'pong') {
-          // Keep-alive response, nothing to do
+          lastPongReceived = Date.now()  // Track when pong received
         } else if (message.method === 'log') {
           const { level, args } = message.params
           const logFn = (logger as any)?.[level] || logger?.log
