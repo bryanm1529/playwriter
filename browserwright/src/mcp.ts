@@ -271,17 +271,17 @@ async function preserveSystemColorScheme(context: BrowserContext): Promise<void>
   options.forcedColors = 'no-override'
 }
 
-function isRegExp(value: any): value is RegExp {
-  return (
-    typeof value === 'object' && value !== null && typeof value.test === 'function' && typeof value.exec === 'function'
-  )
+function isRegExp(value: unknown): value is RegExp {
+  return value instanceof RegExp
 }
 
-function clearUserState() {
-  Object.keys(userState).forEach((key) => delete userState[key])
+function clearUserState(): void {
+  for (const key of Object.keys(userState)) {
+    delete userState[key]
+  }
 }
 
-function clearConnectionState() {
+function clearConnectionState(): void {
   state.isConnected = false
   state.browser = null
   state.page = null
@@ -1098,7 +1098,21 @@ server.tool(
           return { page: newPage, context: newContext }
         },
         require: sandboxedRequire,
-        import: (specifier: string) => import(specifier),
+        // Sandboxed import - applies same allowlist as require()
+        // This prevents sandbox escape via: await import('child_process')
+        import: async (specifier: string) => {
+          if (!ALLOWED_MODULES.has(specifier)) {
+            throw new Error(
+              `Module "${specifier}" is not allowed in the sandbox. ` +
+              `Only safe built-in modules are permitted: ${Array.from(ALLOWED_MODULES).filter(m => !m.startsWith('node:')).join(', ')}`
+            )
+          }
+          // Return scoped fs for fs modules
+          if (specifier === 'fs' || specifier === 'node:fs') {
+            return scopedFs
+          }
+          return import(specifier)
+        },
         ...usefulGlobals,
       }
 

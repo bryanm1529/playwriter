@@ -1,7 +1,6 @@
 import type { Page, Locator, ElementHandle } from 'playwright-core'
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 
 export interface AriaRef {
   role: string

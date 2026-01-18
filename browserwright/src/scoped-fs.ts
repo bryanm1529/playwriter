@@ -163,10 +163,20 @@ export class ScopedFS {
   }
 
   symlinkSync = (target: fs.PathLike, linkPath: fs.PathLike, type?: fs.symlink.Type | null): void => {
+    const targetStr = target.toString()
     const resolvedLink = this.resolvePath(linkPath.toString())
+
+    // Defense in depth: reject absolute symlink targets entirely
+    // Symlinks in a sandbox should only point to relative paths within the sandbox
+    if (path.isAbsolute(targetStr)) {
+      const error = new Error(`EPERM: operation not permitted, absolute symlink targets not allowed in sandbox`) as NodeJS.ErrnoException
+      error.code = 'EPERM'
+      throw error
+    }
+
     // Target is relative to link location, resolve it to check bounds
     const linkDir = path.dirname(resolvedLink)
-    const resolvedTarget = path.resolve(linkDir, target.toString())
+    const resolvedTarget = path.resolve(linkDir, targetStr)
     if (!this.isPathAllowed(resolvedTarget)) {
       const error = new Error(`EPERM: operation not permitted, symlink target outside allowed directories`) as NodeJS.ErrnoException
       error.code = 'EPERM'

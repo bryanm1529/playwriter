@@ -72,11 +72,15 @@ interface LockFileData {
  */
 function getCacheDir(): string {
   const platform = process.platform
-  const cacheDir = platform === 'darwin'
-    ? path.join(os.homedir(), 'Library', 'Caches')
-    : platform === 'win32'
-      ? process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
-      : path.join(os.homedir(), '.cache')
+
+  let cacheDir: string
+  if (platform === 'darwin') {
+    cacheDir = path.join(os.homedir(), 'Library', 'Caches')
+  } else if (platform === 'win32') {
+    cacheDir = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
+  } else {
+    cacheDir = path.join(os.homedir(), '.cache')
+  }
 
   return path.join(cacheDir, 'browserwright')
 }
@@ -492,25 +496,32 @@ export async function launchBrowser(options: LaunchOptions = {}): Promise<Launch
  */
 export function isProfileLocked(userDataDir: string): boolean {
   const lockFile = path.join(userDataDir, 'SingletonLock')
+
+  let stats: fs.Stats
   try {
-    const stats = fs.lstatSync(lockFile)
-    if (stats.isSymbolicLink()) {
-      try {
-        const target = fs.readlinkSync(lockFile)
-        const pidMatch = target.match(/-(\d+)$/)
-        if (pidMatch) {
-          const pid = parseInt(pidMatch[1], 10)
-          process.kill(pid, 0)
-          return true
-        }
-      } catch {
-        return false
-      }
-    }
-    return stats.isFile() || stats.isSymbolicLink()
+    stats = fs.lstatSync(lockFile)
   } catch {
     return false
   }
+
+  if (!stats.isSymbolicLink()) {
+    return stats.isFile()
+  }
+
+  // Check if the process holding the lock is still running
+  try {
+    const target = fs.readlinkSync(lockFile)
+    const pidMatch = target.match(/-(\d+)$/)
+    if (pidMatch) {
+      const pid = parseInt(pidMatch[1], 10)
+      process.kill(pid, 0)
+      return true
+    }
+  } catch {
+    return false
+  }
+
+  return true
 }
 
 /**

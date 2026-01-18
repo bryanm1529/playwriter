@@ -18,9 +18,6 @@ type ConnectedTarget = {
   targetInfo: Protocol.Target.TargetInfo
 }
 
-// Extension IDs imported from shared config (extension-ids.json)
-const OUR_EXTENSION_IDS = EXTENSION_IDS
-
 /**
  * Checks if a target should be filtered out (not exposed to Playwright).
  * Filters extension pages, service workers, and other restricted targets,
@@ -44,7 +41,7 @@ function isRestrictedTarget(targetInfo: Protocol.Target.TargetInfo): boolean {
   // Allow our own extension pages
   if (url.startsWith('chrome-extension://')) {
     const extensionId = url.replace('chrome-extension://', '').split('/')[0]
-    if (OUR_EXTENSION_IDS.includes(extensionId)) {
+    if (EXTENSION_IDS.includes(extensionId)) {
       return false
     }
     return true
@@ -432,77 +429,35 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
   // Allows tools like Playwright to discover the WebSocket URL via http://host:port
   // Spec: https://chromium.googlesource.com/chromium/src/+/main/content/browser/devtools/devtools_http_handler.cc
 
-  app
-    .on(['GET', 'PUT'], '/json/version', (c) => {
-      return c.json({
-        'Browser': `Browserwright/${VERSION}`,
-        'Protocol-Version': '1.3',
-        'webSocketDebuggerUrl': getCdpWsUrl(c)
-      })
-    })
-    .on(['GET', 'PUT'], '/json/version/', (c) => {
-      return c.json({
-        'Browser': `Browserwright/${VERSION}`,
-        'Protocol-Version': '1.3',
-        'webSocketDebuggerUrl': getCdpWsUrl(c)
-      })
-    })
-    .on(['GET', 'PUT'], '/json/list', (c) => {
-      const wsUrl = getCdpWsUrl(c)
-      return c.json(
-        Array.from(connectedTargets.values()).map(t => ({
-          id: t.targetId,
-          type: t.targetInfo.type,
-          title: t.targetInfo.title,
-          description: t.targetInfo.title,
-          url: t.targetInfo.url,
-          webSocketDebuggerUrl: wsUrl,
-          devtoolsFrontendUrl: `/devtools/inspector.html?ws=${wsUrl.replace('ws://', '')}`
-        }))
-      )
-    })
-    .on(['GET', 'PUT'], '/json/list/', (c) => {
-      const wsUrl = getCdpWsUrl(c)
-      return c.json(
-        Array.from(connectedTargets.values()).map(t => ({
-          id: t.targetId,
-          type: t.targetInfo.type,
-          title: t.targetInfo.title,
-          description: t.targetInfo.title,
-          url: t.targetInfo.url,
-          webSocketDebuggerUrl: wsUrl,
-          devtoolsFrontendUrl: `/devtools/inspector.html?ws=${wsUrl.replace('ws://', '')}`
-        }))
-      )
-    })
-    .on(['GET', 'PUT'], '/json', (c) => {
-      const wsUrl = getCdpWsUrl(c)
-      return c.json(
-        Array.from(connectedTargets.values()).map(t => ({
-          id: t.targetId,
-          type: t.targetInfo.type,
-          title: t.targetInfo.title,
-          description: t.targetInfo.title,
-          url: t.targetInfo.url,
-          webSocketDebuggerUrl: wsUrl,
-          devtoolsFrontendUrl: `/devtools/inspector.html?ws=${wsUrl.replace('ws://', '')}`
-        }))
-      )
-    })
-    .on(['GET', 'PUT'], '/json/', (c) => {
-      const wsUrl = getCdpWsUrl(c)
-      return c.json(
-        Array.from(connectedTargets.values()).map(t => ({
-          id: t.targetId,
-          type: t.targetInfo.type,
-          title: t.targetInfo.title,
-          description: t.targetInfo.title,
-          url: t.targetInfo.url,
-          webSocketDebuggerUrl: wsUrl,
-          devtoolsFrontendUrl: `/devtools/inspector.html?ws=${wsUrl.replace('ws://', '')}`
-        }))
-      )
-    })
+  // Helper to build target list response
+  function buildTargetListResponse(c: { req: { header: (name: string) => string | undefined } }) {
+    const wsUrl = getCdpWsUrl(c)
+    return Array.from(connectedTargets.values()).map(t => ({
+      id: t.targetId,
+      type: t.targetInfo.type,
+      title: t.targetInfo.title,
+      description: t.targetInfo.title,
+      url: t.targetInfo.url,
+      webSocketDebuggerUrl: wsUrl,
+      devtoolsFrontendUrl: `/devtools/inspector.html?ws=${wsUrl.replace('ws://', '')}`
+    }))
+  }
+
+  // Version endpoint (with and without trailing slash)
+  const versionHandler = (c: any) => c.json({
+    'Browser': `Browserwright/${VERSION}`,
+    'Protocol-Version': '1.3',
+    'webSocketDebuggerUrl': getCdpWsUrl(c)
+  })
+  app.on(['GET', 'PUT'], '/json/version', versionHandler)
+  app.on(['GET', 'PUT'], '/json/version/', versionHandler)
+
+  // Target list endpoints (with and without trailing slash)
+  const listHandler = (c: any) => c.json(buildTargetListResponse(c))
+  app.on(['GET', 'PUT'], '/json/list', listHandler)
+  app.on(['GET', 'PUT'], '/json/list/', listHandler)
+  app.on(['GET', 'PUT'], '/json', listHandler)
+  app.on(['GET', 'PUT'], '/json/', listHandler)
 
   app.post('/mcp-log', async (c) => {
     try {
@@ -527,7 +482,7 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
     if (origin) {
       if (origin.startsWith('chrome-extension://')) {
         const extensionId = origin.replace('chrome-extension://', '')
-        if (!OUR_EXTENSION_IDS.includes(extensionId)) {
+        if (!EXTENSION_IDS.includes(extensionId)) {
           logger?.log(chalk.red(`Rejecting /cdp WebSocket from unknown extension: ${extensionId}`))
           return c.text('Forbidden', 403)
         }
@@ -735,7 +690,7 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
     }
     
     const extensionId = origin.replace('chrome-extension://', '')
-    if (!OUR_EXTENSION_IDS.includes(extensionId)) {
+    if (!EXTENSION_IDS.includes(extensionId)) {
       logger?.log(chalk.red(`Rejecting /extension WebSocket from unknown extension: ${extensionId}`))
       return c.text('Forbidden', 403)
     }
@@ -750,17 +705,13 @@ export async function startBrowserwrightCDPRelayServer({ port = 19988, host = '1
 
           // Clear state from the old connection to prevent leaks
           connectedTargets.clear()
+
           // Reject pending requests with context about which methods were interrupted
-          const pendingMethods: string[] = []
-          for (const [id, pending] of extensionPendingRequests.entries()) {
-            // The ID can hint at the method if we track it (we don't currently, so note the count)
-            pendingMethods.push(`request #${id}`)
-          }
-          const pendingInfo = pendingMethods.length > 0
-            ? ` Interrupted requests: ${pendingMethods.slice(0, 5).join(', ')}${pendingMethods.length > 5 ? ` (+${pendingMethods.length - 5} more)` : ''}`
-            : ''
+          const pendingCount = extensionPendingRequests.size
+          const pendingInfo = pendingCount > 0 ? ` ${pendingCount} pending request(s) interrupted.` : ''
+          const errorMessage = `Extension connection replaced - reconnecting.${pendingInfo}`
           for (const pending of extensionPendingRequests.values()) {
-            pending.reject(new Error(`Extension connection replaced - reconnecting.${pendingInfo}`))
+            pending.reject(new Error(errorMessage))
           }
           extensionPendingRequests.clear()
 
